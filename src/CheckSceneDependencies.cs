@@ -11,40 +11,76 @@ using UnityEngine.UI;
 
 namespace everlaster
 {
-    sealed class CheckDependencies : Script
+    sealed class UnityEventsListener : MonoBehaviour
     {
-        public override bool ShouldIgnore() => false;
+        public Action enabledHandlers;
 
+        void OnEnable()
+        {
+            enabledHandlers?.Invoke();
+        }
+    }
+
+    sealed class CheckDependencies : MVRScript
+    {
+        UnityEventsListener _uiListener;
         JSONClass _metaJson;
         HubDownloader _downloader;
         readonly Dictionary<string, bool> _packages = new Dictionary<string, bool>();
+        bool _initialized;
+        bool _uiCreated;
 
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableAction _findDependenciesAction;
         JSONStorableAction _downloadAction;
         JSONStorableString _infoString;
 
+        public override void InitUI()
+        {
+            base.InitUI();
+            if(UITransform == null)
+            {
+                return;
+            }
+
+            UITransform.Find("Scroll View").GetComponent<Image>().color = new Color(0.85f, 0.85f, 0.85f);
+            _uiListener = UITransform.gameObject.AddComponent<UnityEventsListener>();
+            _uiListener.enabledHandlers += UIEnabled;
+        }
+
+        void UIEnabled()
+        {
+            if(!_initialized)
+            {
+                return;
+            }
+
+            if(_uiCreated)
+            {
+                CheckDownloaderEnabled(true);
+            }
+            else
+            {
+                CreateUI();
+                _uiCreated = true;
+            }
+        }
+
         public override void Init()
         {
             try
             {
-                logBuilder = new LogBuilder(nameof(CheckDependencies));
                 if(containingAtom.type == "SessionPluginManager")
                 {
-                    logBuilder.Error("Do not add as Session Plugin.", false);
+                    SuperController.LogError("CheckDependencies: Do not add as Session Plugin.");
                     enabledJSON.valNoCallback = false;
-                    return;
-                }
-
-                if(IsDuplicate())
-                {
                     return;
                 }
 
                 _metaJson = FindLoadedSceneMetaJson();
                 if(_metaJson == null)
                 {
-                    logBuilder.Error("Invalid scene (must be from package).", false);
+                    SuperController.LogError("CheckDependencies: Invalid scene (must be from package).");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -52,7 +88,7 @@ namespace everlaster
                 _downloader = HubDownloader.singleton;
                 if(_downloader == null)
                 {
-                    logBuilder.Error("HubDownloader not found.", false);
+                    SuperController.LogError("CheckDependencies: HubDownloader not found.");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -66,11 +102,11 @@ namespace everlaster
                 RegisterAction(_downloadAction);
 
                 CheckDownloaderEnabled();
-                initialized = true;
+                _initialized = true;
             }
             catch(Exception e)
             {
-                logBuilder.Exception(e);
+                SuperController.LogError($"CheckDependencies.Init: {e}");
             }
         }
 
@@ -102,7 +138,7 @@ namespace everlaster
             return true;
         }
 
-        protected override void CreateUI()
+        void CreateUI()
         {
             var title = CreateTextField(new JSONStorableString("title", "Check Scene Depencencies"));
             title.height = 60;
@@ -119,14 +155,9 @@ namespace everlaster
             rect.anchoredPosition = pos;
 
             CreateToggle(_searchSubDependenciesBool);
-            this.CreateButton(_findDependenciesAction);
-            this.CreateButton(_downloadAction);
+            _findDependenciesAction.RegisterButton(CreateButton(_findDependenciesAction.name));
+            _downloadAction.RegisterButton(CreateButton(_downloadAction.name));
             CreateTextField(_infoString, true).height = 1200;
-        }
-
-        protected override void OnUIEnabled()
-        {
-            CheckDownloaderEnabled(true);
         }
 
         void FindDependencies()
@@ -157,7 +188,7 @@ namespace everlaster
                 {
                     if(depth == 0)
                     {
-                        logBuilder.Error("Invalid meta.json.", false);
+                        _infoString.val = "No dependencies found: invalid meta.json.";
                     }
 
                     return;
@@ -178,7 +209,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                logBuilder.Exception(e);
+                SuperController.LogError($"CheckDependencies.FindDependencies: {e}");
             }
         }
 
@@ -202,7 +233,7 @@ namespace everlaster
 
                 bool result = _downloader.DownloadPackages(
                     () => {},
-                    e => logBuilder.Error($"DownloadAll Request failed with error:\n{e}", false),
+                    e => SuperController.LogError($"CheckDependencies.DownloadMissing: DownloadAll Request failed with error:\n{e}"),
                     missingIds
                 );
 
@@ -217,7 +248,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                logBuilder.Exception(e);
+                SuperController.LogError($"CheckDependencies.DownloadMissing: {e}");
             }
         }
 
@@ -249,10 +280,17 @@ namespace everlaster
                     break;
                 }
             }
+
+            _updateStatusCo = null;
         }
 
-        protected override void DoDestroy()
+        void OnDestroy()
         {
+            if(_uiListener != null)
+            {
+                DestroyImmediate(_uiListener);
+            }
+
             if(_updateStatusCo != null)
             {
                 StopCoroutine(_updateStatusCo);

@@ -88,7 +88,6 @@
         <!--        </Reference>-->
     </ItemGroup>
     <ItemGroup>
-        <Compile Include="..\Common\src\**\*.cs"/>
         <Compile Include="src\CheckSceneDependencies.cs"/>
     </ItemGroup>
     <ItemGroup>

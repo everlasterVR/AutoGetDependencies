@@ -27,14 +27,10 @@ package_files() {
     line=$(echo "$line" | sed 's/\r$//')
     line="${line//\\//}"
     filename=$(basename "$line")
-    from_dir=$(dirname "$line")
-    to_dir=$(dirname "$line" | sed 's#\.\./Common/src/Common#src/Common#')
-    mkdir -p "$resource_dir/$to_dir"
-    cp "$from_dir/$filename" "$resource_dir/$to_dir/"
+    dir=$(dirname "$line")
+    mkdir -p "$resource_dir/$dir"
+    cp "$dir/$filename" "$resource_dir/$dir/"
   done < "$file"
-
-  # Update the .cslist file to reference the updated Common file paths
-  sed -i 's#\.\.\\Common\\src\\Common#src\\Common#g' "$resource_dir/$(basename "$file")"
 }
 
 update_version_info() {
