@@ -1,0 +1,104 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')"/>
+    <PropertyGroup>
+        <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+        <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+        <ProjectGuid>{4C11FC39-F69F-45E4-ADE5-CFFFED726C42}</ProjectGuid>
+        <OutputType>Library</OutputType>
+        <AppDesignerFolder>Properties</AppDesignerFolder>
+        <RootNamespace>CheckSceneDependencies</RootNamespace>
+        <AssemblyName>CheckSceneDependencies</AssemblyName>
+        <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+        <FileAlignment>512</FileAlignment>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+        <PlatformTarget>AnyCPU</PlatformTarget>
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>full</DebugType>
+        <Optimize>false</Optimize>
+        <OutputPath>bin\Debug\</OutputPath>
+        <DefineConstants>DEBUG;TRACE</DefineConstants>
+        <ErrorReport>prompt</ErrorReport>
+        <WarningLevel>4</WarningLevel>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+        <PlatformTarget>AnyCPU</PlatformTarget>
+        <DebugType>pdbonly</DebugType>
+        <Optimize>true</Optimize>
+        <OutputPath>bin\Release\</OutputPath>
+        <ErrorReport>prompt</ErrorReport>
+        <WarningLevel>4</WarningLevel>
+    </PropertyGroup>
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>..\..\..\..\VaM_Data\Managed\Assembly-CSharp.dll</HintPath>
+        </Reference>
+        <Reference Include="System"/>
+        <Reference Include="System.Core"/>
+        <Reference Include="System.Xml.Linq"/>
+        <!--        <Reference Include="System.Data.DataSetExtensions" />-->
+        <!--        <Reference Include="System.Data" />-->
+        <!--        <Reference Include="System.Xml" />-->
+        <Reference Include="UnityEngine">
+            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.dll</HintPath>
+        </Reference>
+        <!--        <Reference Include="UnityEngine.AnimationModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>-->
+        <!--        </Reference>-->
+        <!--        <Reference Include="UnityEngine.AssetBundleModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.AssetBundleModule.dll</HintPath>-->
+        <!--        </Reference>-->
+        <!--        <Reference Include="UnityEngine.AudioModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.AudioModule.dll</HintPath>-->
+        <!--        </Reference>-->
+        <!--        <Reference Include="UnityEngine.BaselibModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.BaselibModule.dll</HintPath>-->
+        <!--        </Reference>-->
+        <!--        <Reference Include="UnityEngine.ClothModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.ClothModule.dll</HintPath>-->
+        <!--        </Reference>-->
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+        </Reference>
+        <!--        <Reference Include="UnityEngine.InputModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.InputModule.dll</HintPath>-->
+        <!--        </Reference>-->
+        <Reference Include="UnityEngine.PhysicsModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+            <SpecificVersion>False</SpecificVersion>
+            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.UI">
+            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.UI.dll</HintPath>
+        </Reference>
+        <!--        <Reference Include="UnityEngine.UIElementsModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.UIElementsModule.dll</HintPath>-->
+        <!--        </Reference>-->
+        <Reference Include="UnityEngine.UIModule">
+            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+        </Reference>
+        <!--        <Reference Include="UnityEngine.VRModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.VRModule.dll</HintPath>-->
+        <!--        </Reference>-->
+        <!--        <Reference Include="UnityEngine.XRModule">-->
+        <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.XRModule.dll</HintPath>-->
+        <!--        </Reference>-->
+    </ItemGroup>
+    <ItemGroup>
+        <Compile Include="..\Common\src\**\*.cs"/>
+        <Compile Include="src\CheckSceneDependencies.cs"/>
+    </ItemGroup>
+    <ItemGroup>
+        <None Include=".gitignore"/>
+        <None Include="meta.json"/>
+        <None Include="README.md"/>
+    </ItemGroup>
+    <ItemGroup>
+        <Content Include="scripts\package.sh"/>
+        <Content Include="CheckSceneDependencies.cslist"/>
+    </ItemGroup>
+    <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
+</Project>

@@ -1,0 +1,6 @@
+..\Common\src\Common\Components\UnityEventsListener.cs
+..\Common\src\Common\Utils\LogBuilder.cs
+..\Common\src\Common\Extensions.cs
+..\Common\src\Common\Resources.cs
+..\Common\src\Common\Script.cs
+src\CheckSceneDependencies.cs
