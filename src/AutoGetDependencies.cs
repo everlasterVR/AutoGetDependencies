@@ -159,7 +159,7 @@ namespace everlaster
             CreateToggle(_logErrorsBool);
         }
 
-        bool _firstTimeFind;
+        bool _dependenciesFound;
 
         void FindDependenciesCallback()
         {
@@ -172,9 +172,14 @@ namespace everlaster
                 sb.AppendLine(obj.exists ? obj.id : $"<b>{obj.id}</b>");
             }
 
-            sb.Append("\n\nAll dependencies installed. TODO configurable trigger");
+            if(_packages.TrueForAll(obj => obj.exists))
+            {
+                sb.Append("\n\nAll dependencies installed. TODO configurable trigger");
+                _logBuilder.Message("All dependencies installed. TODO configurable trigger");
+            }
+
             _infoString.val = sb.ToString();
-            _firstTimeFind = true;
+            _dependenciesFound = true;
         }
 
         void FindDependencies(JSONClass json, bool recursive = false, int depth = 0)
@@ -222,7 +227,7 @@ namespace everlaster
         {
             try
             {
-                if(!_firstTimeFind)
+                if(!_dependenciesFound)
                 {
                     _logBuilder.Message("Must find dependencies first.");
                     return;
@@ -235,6 +240,7 @@ namespace everlaster
                 }
 
                 _downloadCo = StartCoroutine(DownloadMissingViaHubCo());
+                _dependenciesFound = false;
             }
             catch(Exception e)
             {
@@ -262,6 +268,13 @@ namespace everlaster
             }
 
             var hubBrowsePanelT = _hubBrowse.UITransform;
+            if(hubBrowsePanelT == null)
+            {
+                if(_logErrorsBool.val) _logBuilder.Error("HubBrowsePanel not found");
+                _infoString.val = "";
+                yield break;
+            }
+
             // wait for HubBrowsePanel to be active
             {
                 float timeout = Time.time + 10;
@@ -274,6 +287,7 @@ namespace everlaster
                 if(Time.time >= timeout)
                 {
                     if(_logErrorsBool.val) _logBuilder.Error("Timeout: HubBrowsePanel not found or active");
+                    _infoString.val = "";
                     yield break;
                 }
             }
@@ -299,6 +313,7 @@ namespace everlaster
                 {
                     if(!indicator.gameObject.activeInHierarchy)
                     {
+                        _infoString.val = "";
                         yield break; // exiting - user kept Hub disabled
                     }
 
@@ -428,7 +443,9 @@ namespace everlaster
                 }
                 else
                 {
-                    _infoString.val += "\n\nSomething went wrong (timeout or error). Packages may still be downloading in the background. TODO configurable trigger on timeout/error";
+                    const string info ="\n\nSomething went wrong (timeout or error). Packages may still be downloading in the background. TODO configurable trigger on timeout/error";
+                    _infoString.val += info;
+                    _logBuilder.Message(info);
                     // TODO trigger on timeout/error
                 }
             }
