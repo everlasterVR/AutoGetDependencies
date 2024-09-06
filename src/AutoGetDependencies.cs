@@ -19,14 +19,16 @@ namespace everlaster
         bool _uiCreated;
         LogBuilder _logBuilder;
         JSONClass _metaJson;
-        HubDownloader _downloader;
-        readonly Dictionary<string, bool> _packages = new Dictionary<string, bool>();
+        HubBrowse _hubBrowse;
+        readonly List<PackageObj> _packages = new List<PackageObj>();
         bool _initialized;
+        Coroutine _downloadCo;
 
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableAction _findDependenciesAction;
         JSONStorableAction _downloadAction;
         JSONStorableString _infoString;
+        JSONStorableBool _logErrorsBool;
 
         public override void InitUI()
         {
@@ -48,11 +50,7 @@ namespace everlaster
                 return;
             }
 
-            if(_uiCreated)
-            {
-                CheckDownloaderEnabled(true);
-            }
-            else
+            if(!_uiCreated)
             {
                 CreateUI();
                 _uiCreated = true;
@@ -79,23 +77,24 @@ namespace everlaster
                     return;
                 }
 
-                _downloader = HubDownloader.singleton;
-                if(_downloader == null)
+                var coreControl = SuperController.singleton.GetAtomByUid("CoreControl");
+                _hubBrowse = (HubBrowse) coreControl.GetStorableByID("HubBrowseController");
+                if(_hubBrowse == null)
                 {
-                    _logBuilder.Error("HubDownloader not found.");
+                    _logBuilder.Error("HubBrowseController not found.");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
 
                 _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", true);
-                _findDependenciesAction = new JSONStorableAction("1. Find dependencies", FindDependencies);
-                _downloadAction = new JSONStorableAction("2. Download missing", DownloadMissing);
+                _findDependenciesAction = new JSONStorableAction("1. Find dependencies", FindDependenciesCallback);
+                _downloadAction = new JSONStorableAction("2. Download missing", DownloadMissingCallback);
                 _infoString = new JSONStorableString("Info", "");
+                _logErrorsBool = new JSONStorableBool("Log errors", false);
                 RegisterBool(_searchSubDependenciesBool);
                 RegisterAction(_findDependenciesAction);
                 RegisterAction(_downloadAction);
-
-                CheckDownloaderEnabled();
+                RegisterBool(_logErrorsBool);
                 _initialized = true;
             }
             catch(Exception e)
@@ -114,22 +113,6 @@ namespace everlaster
 
             string metaJsonPath = loadedScene.Split(':')[0] + ":/meta.json";
             return SuperController.singleton.LoadJSON(metaJsonPath).AsObject;
-        }
-
-        bool CheckDownloaderEnabled(bool resetInfo = false)
-        {
-            if(!_downloader.HubDownloaderEnabled)
-            {
-                _infoString.val = "Package Downloader not enabled. Go to User Preferences -> Security, and check Enable Package Downloader";
-                return false;
-            }
-
-            if(resetInfo)
-            {
-                _infoString.val = "";
-            }
-
-            return true;
         }
 
         void CreateUI()
@@ -152,24 +135,20 @@ namespace everlaster
             _findDependenciesAction.RegisterButton(CreateButton(_findDependenciesAction.name));
             _downloadAction.RegisterButton(CreateButton(_downloadAction.name));
             CreateTextField(_infoString, true).height = 1200;
+            CreateToggle(_logErrorsBool);
         }
 
         bool _firstTimeFind;
 
-        void FindDependencies()
+        void FindDependenciesCallback()
         {
             _packages.Clear();
-            if(!CheckDownloaderEnabled())
-            {
-                return;
-            }
-
             FindDependencies(_metaJson, _searchSubDependenciesBool.val);
             var sb = new StringBuilder();
             sb.Append("Found packages (highlight missing):\n\n");
-            foreach(var pair in _packages)
+            foreach(var obj in _packages)
             {
-                sb.AppendLine(pair.Value ? pair.Key : $"<b>{pair.Key}</b>");
+                sb.AppendLine(obj.exists ? obj.id : $"<b>{obj.id}</b>");
             }
 
             _infoString.val = sb.ToString();
@@ -180,9 +159,9 @@ namespace everlaster
         {
             try
             {
-                if(_updateStatusCo != null)
+                if(_downloadCo != null)
                 {
-                    StopCoroutine(_updateStatusCo);
+                    StopCoroutine(_downloadCo);
                 }
 
                 var dependenciesJc = json["dependencies"].AsObject;
@@ -199,9 +178,10 @@ namespace everlaster
                 foreach(string key in dependenciesJc.Keys)
                 {
                     string trimmed = key.Trim();
-                    if(!_packages.ContainsKey(trimmed))
+                    var package = _packages.FirstOrDefault(obj => obj.id == trimmed);
+                    if(package == null)
                     {
-                        _packages.Add(trimmed, FileManagerSecure.PackageExists(trimmed));
+                        _packages.Add(new PackageObj(trimmed, FileManagerSecure.PackageExists(trimmed)));
                     }
 
                     if(recursive)
@@ -216,61 +196,23 @@ namespace everlaster
             }
         }
 
-        Coroutine _updateStatusCo;
-
-        void DownloadMissing()
+        void DownloadMissingCallback()
         {
             try
             {
                 if(!_firstTimeFind)
                 {
+                    _logBuilder.Message("Must find dependencies first.");
                     return;
                 }
 
-                if(!CheckDownloaderEnabled())
+                if(_packages.TrueForAll(obj => obj.exists))
                 {
+                    _infoString.val = "All dependencies are already downloaded.";
                     return;
                 }
 
-                string[] missingIds = _packages.Where(pair => !pair.Value).Select(pair => pair.Key).ToArray();
-                if(missingIds.Length == 0)
-                {
-                    _infoString.val = "All missing packages already downloaded.";
-                    return;
-                }
-
-                // var packageUIs = _downloader.GetComponentsInChildren<HubResourcePackageUI>();
-                // Debug.Log(packageUIs.Length);
-                // foreach (var packageUI in packageUIs)
-                // {
-                //     Debug.Log(Dev.ObjectPropertiesString(packageUI));
-                //     var connectedItem = packageUI.connectedItem;
-                //     if(connectedItem != null)
-                //     {
-                //         Debug.Log(Dev.ObjectPropertiesString(connectedItem));
-                //     }
-                // }
-
-                bool result = _downloader.DownloadPackages(
-                    () => {},
-                    e => _logBuilder.Error($"CheckDependencies.DownloadMissing: DownloadAll Request failed with error:\n{e}"),
-                    missingIds
-                );
-
-                if(result)
-                {
-                    _updateStatusCo = StartCoroutine(UpdateStatusCo(missingIds));
-                }
-                else
-                {
-                    _infoString.val = "Failed to download missing packages.";
-                }
-
-                // foreach(string id in missingIds)
-                // {
-                //     HubDownloader.singleton.FindPackage(id, true);
-                // }
-                _updateStatusCo = StartCoroutine(UpdateStatusCo(missingIds));
+                _downloadCo = StartCoroutine(DownloadMissingViaHubCo());
             }
             catch(Exception e)
             {
@@ -278,36 +220,261 @@ namespace everlaster
             }
         }
 
-        IEnumerator UpdateStatusCo(string[] missingIds)
+        /*
+         * HubBrowsePanel/MissingPackagesPanel/InnerPanel/HubDownloads/Downloads/Viewport/Content
+         *      PackageDownloadPanel(Clone) (multiple, one per package)
+         *          HorizontalLayout
+         *              MainContainer
+         *                  ResourceButton | Text
+         *                  DownloadButton | Button
+         */
+        IEnumerator DownloadMissingViaHubCo()
         {
-            float start = Time.unscaledTime;
             _infoString.val = "Downloading missing packages...\n";
+            _hubBrowse.CallAction("OpenMissingPackagesPanel");
+            var hubBrowsePanelT = _hubBrowse.UITransform;
 
-            while(true)
+            // wait for HubBrowsePanel to be active
             {
-                yield return new WaitForSeconds(0.1f);
-
-                bool allDownloaded = true;
-                foreach(string id in missingIds)
+                float timeout = Time.time + 10;
+                while((hubBrowsePanelT == null || !hubBrowsePanelT.gameObject.activeInHierarchy) && Time.time < timeout)
                 {
-                    bool downloaded = FileManagerSecure.PackageExists(id);
-                    if(downloaded)
-                    {
-                        _infoString.val += $"\nPackage {id} downloaded [{Time.unscaledTime - start:F1}s].";
-                    }
-
-                    allDownloaded = allDownloaded && downloaded;
-                    _packages[id] = downloaded;
+                    yield return null;
+                    hubBrowsePanelT = _hubBrowse.UITransform;
                 }
 
-                if(allDownloaded)
+                if(Time.time >= timeout)
                 {
-                    _infoString.val += $"\n<b>All missing packages downloaded [{Time.unscaledTime - start:F1}s]</b>.";
-                    break;
+                    if(_logErrorsBool.val) _logBuilder.Error("Timeout: HubBrowsePanel not found or active");
+                    yield break;
                 }
             }
 
-            _updateStatusCo = null;
+            // wait for Hub to be enabled
+            if(!_hubBrowse.HubEnabled)
+            {
+                yield return null;
+                var indicator = hubBrowsePanelT.Find("HubDisabledIndicator");
+                while(!_hubBrowse.HubEnabled)
+                {
+                    if(!indicator.gameObject.activeInHierarchy)
+                    {
+                        yield break; // exiting - user kept Hub disabled
+                    }
+
+                    yield return null;
+                }
+
+                // continuing - hub enabled by user
+                var refreshingPanelT = hubBrowsePanelT.Find("GetInfoRefrehsingPanel"); // sic
+                yield return null;
+                while(refreshingPanelT.gameObject.activeInHierarchy)
+                {
+                    yield return null; // could take long
+                }
+            }
+
+            // execute main part
+            {
+                var missingPackagesPanelT = hubBrowsePanelT.Find("MissingPackagesPanel");
+                missingPackagesPanelT.SetParent(transform);
+                _hubBrowse.Hide();
+                SuperController.singleton.DeactivateWorldUI();
+
+                var position = missingPackagesPanelT.transform.position;
+                missingPackagesPanelT.transform.position = new Vector3(position.x, position.y - 1000, position.z);
+                ParseMissingPackagesUI(missingPackagesPanelT);
+
+                // download missing packages
+                {
+                    var pendingPackages = _packages.Where(obj => obj.pending).ToList();
+                    foreach(var obj in pendingPackages)
+                    {
+                        obj.downloadButton.onClick.Invoke();
+                    }
+
+                    while(!pendingPackages.TrueForAll(obj => obj.CheckExists()))
+                    {
+                        yield return null; // could take long
+                    }
+                }
+
+                missingPackagesPanelT.transform.position = position;
+                missingPackagesPanelT.SetParent(hubBrowsePanelT);
+                missingPackagesPanelT.gameObject.SetActive(false);
+
+
+                // TODO if any missing -> error -> trigger
+            }
+
+            // finish
+            {
+                _downloadCo = null;
+                _findDependenciesAction.actionCallback();
+                if(_packages.TrueForAll(obj => obj.exists))
+                {
+                    Debug.Log("All packages downloaded.");
+                    // TODO trigger on complete
+                }
+                else
+                {
+                    Debug.Log("Some packages not downloaded.");
+                    // TODO trigger on timeout/error
+                }
+            }
+        }
+
+        void ParseMissingPackagesUI(Transform missingPackagesPanelT)
+        {
+            try
+            {
+                var contentT = missingPackagesPanelT.Find("InnerPanel/HubDownloads/Downloads/Viewport/Content");
+                if(contentT == null)
+                {
+                    if(_logErrorsBool.val) _logBuilder.Error("Content transform not found");
+                    return;
+                }
+
+                foreach(var obj in _packages)
+                {
+                    if(obj.exists)
+                    {
+                        continue;
+                    }
+
+                    string id = obj.id;
+                    var containerT = id.EndsWith(".latest")
+                        ? FindLatestContainerByPackageBaseName(contentT, id)
+                        : FindContainerByPackageId(contentT, id);
+
+                    if(containerT == null)
+                    {
+                        if(_logErrorsBool.val) _logBuilder.Error($"{id}: Container transform not found");
+                        continue;
+                    }
+
+                    var downloadButtonT = containerT.Find("DownloadButton");
+                    if(downloadButtonT == null)
+                    {
+                        if(_logErrorsBool.val) _logBuilder.Error($"{id}: DownloadButton transform not found");
+                        continue;
+                    }
+
+                    if(!downloadButtonT.gameObject.activeSelf)
+                    {
+                        if(_logErrorsBool.val) _logBuilder.Error($"{id}: DownloadButton not active - resource not on Hub?");
+                        continue;
+                    }
+
+                    var downloadButton = downloadButtonT.GetComponent<Button>();
+                    if(downloadButton == null)
+                    {
+                        if(_logErrorsBool.val) _logBuilder.Error($"{id}: DownloadButton has no Button component");
+                        continue;
+                    }
+
+                    obj.pending = true;
+                    obj.downloadButton = downloadButton;
+                }
+            }
+            catch(Exception e)
+            {
+                _logBuilder.Exception(e);
+            }
+        }
+
+        Transform FindLatestContainerByPackageBaseName(Transform content, string packageId)
+        {
+            string packageBaseName = packageId.Replace(".latest", "");
+            Transform latestContainer = null;
+            int latestVersion = -1;
+            foreach(Transform child in content)
+            {
+                if(child.name != "PackageDownloadPanel(Clone)")
+                {
+                    continue;
+                }
+
+                var container = child.Find("HorizontalLayout/MainContainer");
+                if(container == null)
+                {
+                    continue;
+                }
+
+                var resourceButtonText = container.Find("ResourceButton/Text");
+                if(resourceButtonText == null)
+                {
+                    continue;
+                }
+
+                string resourceId = resourceButtonText.GetComponent<Text>().text;
+                int versionSeparatorIdx = resourceId.LastIndexOf(".", StringComparison.Ordinal);
+                if(versionSeparatorIdx == -1)
+                {
+                    _logBuilder.Debug($"{packageId}: Invalid Hub resource: {packageId}");
+                    continue;
+                }
+
+                string resourceBaseName = resourceId.Substring(0, versionSeparatorIdx);
+                if(resourceBaseName == packageBaseName)
+                {
+                    string versionText = resourceId.Substring(versionSeparatorIdx + 1);
+                    int version;
+                    if(!int.TryParse(versionText, out version))
+                    {
+                        _logBuilder.Debug($"{packageId}: Invalid Hub resource version: {versionText}");
+                        continue;
+                    }
+
+                    if(version > latestVersion)
+                    {
+                        latestVersion = version;
+                        latestContainer = container;
+                    }
+                }
+            }
+
+            return latestContainer;
+        }
+
+        static Transform FindContainerByPackageId(Transform content, string packageId)
+        {
+            foreach(Transform child in content)
+            {
+                if(child.name != "PackageDownloadPanel(Clone)")
+                {
+                    continue;
+                }
+
+                var container = child.Find("HorizontalLayout/MainContainer");
+                if(container == null)
+                {
+                    continue;
+                }
+
+                var resourceButtonText = container.Find("ResourceButton/Text");
+                if(resourceButtonText == null)
+                {
+                    continue;
+                }
+
+                if(resourceButtonText.GetComponent<Text>().text == packageId)
+                {
+                    return container;
+                }
+            }
+
+            return null;
+        }
+
+        void Update()
+        {
+            if(!_initialized)
+            {
+                return;
+            }
+
+            // TODO timeout coroutine
         }
 
         void OnDestroy()
@@ -317,9 +484,9 @@ namespace everlaster
                 DestroyImmediate(_uiListener);
             }
 
-            if(_updateStatusCo != null)
+            if(_downloadCo != null)
             {
-                StopCoroutine(_updateStatusCo);
+                StopCoroutine(_downloadCo);
             }
         }
     }

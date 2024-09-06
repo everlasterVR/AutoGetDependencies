@@ -90,6 +90,7 @@
     <ItemGroup>
         <Compile Include="src\AutoGetDependencies.cs" />
         <Compile Include="src\Extensions.cs" />
+        <Compile Include="src\PackageObj.cs" />
         <Compile Include="src\Utils\LogBuilder.cs" />
         <Compile Include="src\Utils\UnityEventsListener.cs" />
     </ItemGroup>
