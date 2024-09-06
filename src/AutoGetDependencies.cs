@@ -28,6 +28,7 @@ namespace everlaster
         JSONStorableAction _findDependenciesAction;
         JSONStorableAction _downloadAction;
         JSONStorableString _infoString;
+        JSONStorableBool _tempEnableHubBool;
         JSONStorableBool _autoAcceptPackagePluginsBool;
         JSONStorableBool _logErrorsBool;
 
@@ -92,11 +93,13 @@ namespace everlaster
                 _downloadAction = new JSONStorableAction("2. Download missing", DownloadMissingCallback);
                 _infoString = new JSONStorableString("Info", "");
                 _logErrorsBool = new JSONStorableBool("Log errors", false);
-                _autoAcceptPackagePluginsBool = new JSONStorableBool("Auto accept package plugins", false);
+                _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
+                _autoAcceptPackagePluginsBool = new JSONStorableBool("Auto-accept package plugins", false);
                 RegisterBool(_searchSubDependenciesBool);
                 RegisterAction(_findDependenciesAction);
                 RegisterAction(_downloadAction);
                 RegisterBool(_logErrorsBool);
+                RegisterBool(_tempEnableHubBool);
                 RegisterBool(_autoAcceptPackagePluginsBool);
                 _initialized = true;
             }
@@ -138,6 +141,7 @@ namespace everlaster
             _findDependenciesAction.RegisterButton(CreateButton(_findDependenciesAction.name));
             _downloadAction.RegisterButton(CreateButton(_downloadAction.name));
             CreateTextField(_infoString, true).height = 1200;
+            CreateToggle(_tempEnableHubBool);
             CreateToggle(_autoAcceptPackagePluginsBool);
             CreateToggle(_logErrorsBool);
         }
@@ -236,8 +240,14 @@ namespace everlaster
         {
             _infoString.val = "Downloading missing packages...\n";
             _hubBrowse.CallAction("OpenMissingPackagesPanel");
-            var hubBrowsePanelT = _hubBrowse.UITransform;
+            bool hubWasTempEnabled = false;
+            if(_tempEnableHubBool.val && !_hubBrowse.HubEnabled)
+            {
+                _hubBrowse.HubEnabled = true;
+                hubWasTempEnabled = true;
+            }
 
+            var hubBrowsePanelT = _hubBrowse.UITransform;
             // wait for HubBrowsePanel to be active
             {
                 float timeout = Time.time + 10;
@@ -254,7 +264,19 @@ namespace everlaster
                 }
             }
 
-            // wait for Hub to be enabled
+            bool waitForRefresh = false;
+            if(hubWasTempEnabled)
+            {
+                var refreshingPanelT = hubBrowsePanelT.Find("GetInfoRefrehsingPanel"); // sic
+                yield return null;
+                while(refreshingPanelT.gameObject.activeInHierarchy)
+                {
+                    yield return null; // could take long
+                }
+
+                waitForRefresh = true;
+            }
+
             if(!_hubBrowse.HubEnabled)
             {
                 yield return null;
@@ -269,7 +291,12 @@ namespace everlaster
                     yield return null;
                 }
 
-                // continuing - hub enabled by user
+                waitForRefresh = true;
+            }
+
+            // wait for refreshing panel to disappear
+            if(waitForRefresh)
+            {
                 var refreshingPanelT = hubBrowsePanelT.Find("GetInfoRefrehsingPanel"); // sic
                 yield return null;
                 while(refreshingPanelT.gameObject.activeInHierarchy)
@@ -343,6 +370,11 @@ namespace everlaster
 
             // finish
             {
+                if(hubWasTempEnabled)
+                {
+                    _hubBrowse.HubEnabled = false;
+                }
+
                 _downloadCo = null;
                 _findDependenciesAction.actionCallback();
                 if(_packages.TrueForAll(obj => obj.exists))
