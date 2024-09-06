@@ -89,6 +89,7 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="src\CheckSceneDependencies.cs"/>
+        <Compile Include="src\UnityEventsListener.cs" />
     </ItemGroup>
     <ItemGroup>
         <None Include=".gitignore"/>
@@ -96,6 +97,7 @@
         <None Include="README.md"/>
     </ItemGroup>
     <ItemGroup>
+        <Content Include="LICENSE" />
         <Content Include="scripts\package.sh"/>
         <Content Include="CheckSceneDependencies.cslist"/>
     </ItemGroup>

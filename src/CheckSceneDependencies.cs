@@ -9,18 +9,10 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
+// Licensed under Creative Commons Attribution 4.0 International https://creativecommons.org/licenses/by/4.0/
+// (c) 2024 everlaster
 namespace everlaster
 {
-    sealed class UnityEventsListener : MonoBehaviour
-    {
-        public Action enabledHandlers;
-
-        void OnEnable()
-        {
-            enabledHandlers?.Invoke();
-        }
-    }
-
     sealed class CheckDependencies : MVRScript
     {
         UnityEventsListener _uiListener;
@@ -160,6 +152,8 @@ namespace everlaster
             CreateTextField(_infoString, true).height = 1200;
         }
 
+        bool _firstTimeFind;
+
         void FindDependencies()
         {
             _packages.Clear();
@@ -177,12 +171,18 @@ namespace everlaster
             }
 
             _infoString.val = sb.ToString();
+            _firstTimeFind = true;
         }
 
         void FindDependencies(JSONClass json, bool recursive = false, int depth = 0)
         {
             try
             {
+                if(_updateStatusCo != null)
+                {
+                    StopCoroutine(_updateStatusCo);
+                }
+
                 var dependenciesJc = json["dependencies"].AsObject;
                 if(dependenciesJc == null)
                 {
@@ -196,9 +196,10 @@ namespace everlaster
 
                 foreach(string key in dependenciesJc.Keys)
                 {
-                    if(!_packages.ContainsKey(key))
+                    string trimmed = key.Trim();
+                    if(!_packages.ContainsKey(trimmed))
                     {
-                        _packages.Add(key, FileManagerSecure.PackageExists(key));
+                        _packages.Add(trimmed, FileManagerSecure.PackageExists(trimmed));
                     }
 
                     if(recursive)
@@ -219,6 +220,11 @@ namespace everlaster
         {
             try
             {
+                if(!_firstTimeFind)
+                {
+                    return;
+                }
+
                 if(!CheckDownloaderEnabled())
                 {
                     return;
@@ -230,6 +236,18 @@ namespace everlaster
                     _infoString.val = "All missing packages already downloaded.";
                     return;
                 }
+
+                // var packageUIs = _downloader.GetComponentsInChildren<HubResourcePackageUI>();
+                // Debug.Log(packageUIs.Length);
+                // foreach (var packageUI in packageUIs)
+                // {
+                //     Debug.Log(Dev.ObjectPropertiesString(packageUI));
+                //     var connectedItem = packageUI.connectedItem;
+                //     if(connectedItem != null)
+                //     {
+                //         Debug.Log(Dev.ObjectPropertiesString(connectedItem));
+                //     }
+                // }
 
                 bool result = _downloader.DownloadPackages(
                     () => {},
@@ -245,6 +263,12 @@ namespace everlaster
                 {
                     _infoString.val = "Failed to download missing packages.";
                 }
+
+                // foreach(string id in missingIds)
+                // {
+                //     HubDownloader.singleton.FindPackage(id, true);
+                // }
+                _updateStatusCo = StartCoroutine(UpdateStatusCo(missingIds));
             }
             catch(Exception e)
             {
