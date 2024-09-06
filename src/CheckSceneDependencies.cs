@@ -13,14 +13,15 @@ using UnityEngine.UI;
 // (c) 2024 everlaster
 namespace everlaster
 {
-    sealed class CheckDependencies : MVRScript
+    sealed class CheckSceneDependencies : MVRScript
     {
         UnityEventsListener _uiListener;
+        bool _uiCreated;
+        LogBuilder logBuilder;
         JSONClass _metaJson;
         HubDownloader _downloader;
         readonly Dictionary<string, bool> _packages = new Dictionary<string, bool>();
         bool _initialized;
-        bool _uiCreated;
 
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableAction _findDependenciesAction;
@@ -62,9 +63,10 @@ namespace everlaster
         {
             try
             {
+                logBuilder = new LogBuilder(nameof(CheckSceneDependencies));
                 if(containingAtom.type == "SessionPluginManager")
                 {
-                    SuperController.LogError("CheckDependencies: Do not add as Session Plugin.");
+                    logBuilder.Error("CheckDependencies: Do not add as Session Plugin.");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -72,7 +74,7 @@ namespace everlaster
                 _metaJson = FindLoadedSceneMetaJson();
                 if(_metaJson == null)
                 {
-                    SuperController.LogError("CheckDependencies: Invalid scene (must be from package).");
+                    logBuilder.Error("CheckDependencies: Invalid scene (must be from package).");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -80,7 +82,7 @@ namespace everlaster
                 _downloader = HubDownloader.singleton;
                 if(_downloader == null)
                 {
-                    SuperController.LogError("CheckDependencies: HubDownloader not found.");
+                    logBuilder.Error("HubDownloader not found.");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -98,7 +100,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                SuperController.LogError($"CheckDependencies.Init: {e}");
+                logBuilder.Exception(e);
             }
         }
 
@@ -210,7 +212,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                SuperController.LogError($"CheckDependencies.FindDependencies: {e}");
+                logBuilder.Exception(e);
             }
         }
 
@@ -251,7 +253,7 @@ namespace everlaster
 
                 bool result = _downloader.DownloadPackages(
                     () => {},
-                    e => SuperController.LogError($"CheckDependencies.DownloadMissing: DownloadAll Request failed with error:\n{e}"),
+                    e => logBuilder.Error($"CheckDependencies.DownloadMissing: DownloadAll Request failed with error:\n{e}"),
                     missingIds
                 );
 
@@ -272,7 +274,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                SuperController.LogError($"CheckDependencies.DownloadMissing: {e}");
+                logBuilder.Exception(e);
             }
         }
 
