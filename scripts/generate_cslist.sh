@@ -1,4 +1,4 @@
 #!/bin/bash
 
-files=$(grep -o '<Compile Include="[^"]*"' CheckSceneDependencies.csproj | sed 's/<Compile Include="//; s/"//')
-echo "$files" > CheckSceneDependencies.cslist
+files=$(grep -o '<Compile Include="[^"]*"' AutoGetDependencies.csproj | sed 's/<Compile Include="//; s/"//')
+echo "$files" > AutoGetDependencies.cslist

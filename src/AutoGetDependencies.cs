@@ -13,11 +13,11 @@ using UnityEngine.UI;
 // (c) 2024 everlaster
 namespace everlaster
 {
-    sealed class CheckSceneDependencies : MVRScript
+    sealed class AutoGetDependencies : MVRScript
     {
         UnityEventsListener _uiListener;
         bool _uiCreated;
-        LogBuilder logBuilder;
+        LogBuilder _logBuilder;
         JSONClass _metaJson;
         HubDownloader _downloader;
         readonly Dictionary<string, bool> _packages = new Dictionary<string, bool>();
@@ -63,10 +63,10 @@ namespace everlaster
         {
             try
             {
-                logBuilder = new LogBuilder(nameof(CheckSceneDependencies));
+                _logBuilder = new LogBuilder(nameof(AutoGetDependencies));
                 if(containingAtom.type == "SessionPluginManager")
                 {
-                    logBuilder.Error("CheckDependencies: Do not add as Session Plugin.");
+                    _logBuilder.Error("Do not add as Session Plugin.");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -74,7 +74,7 @@ namespace everlaster
                 _metaJson = FindLoadedSceneMetaJson();
                 if(_metaJson == null)
                 {
-                    logBuilder.Error("CheckDependencies: Invalid scene (must be from package).");
+                    _logBuilder.Error("Invalid scene (must be from package).");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -82,7 +82,7 @@ namespace everlaster
                 _downloader = HubDownloader.singleton;
                 if(_downloader == null)
                 {
-                    logBuilder.Error("HubDownloader not found.");
+                    _logBuilder.Error("HubDownloader not found.");
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -100,7 +100,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                logBuilder.Exception(e);
+                _logBuilder.Exception(e);
             }
         }
 
@@ -134,7 +134,7 @@ namespace everlaster
 
         void CreateUI()
         {
-            var title = CreateTextField(new JSONStorableString("title", "Check Scene Depencencies"));
+            var title = CreateTextField(new JSONStorableString("title", "Auto Get Dependencies"));
             title.height = 60;
             var layoutElement = title.GetComponent<LayoutElement>();
             layoutElement.minHeight = 60;
@@ -212,7 +212,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                logBuilder.Exception(e);
+                _logBuilder.Exception(e);
             }
         }
 
@@ -253,7 +253,7 @@ namespace everlaster
 
                 bool result = _downloader.DownloadPackages(
                     () => {},
-                    e => logBuilder.Error($"CheckDependencies.DownloadMissing: DownloadAll Request failed with error:\n{e}"),
+                    e => _logBuilder.Error($"CheckDependencies.DownloadMissing: DownloadAll Request failed with error:\n{e}"),
                     missingIds
                 );
 
@@ -274,7 +274,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                logBuilder.Exception(e);
+                _logBuilder.Exception(e);
             }
         }
 

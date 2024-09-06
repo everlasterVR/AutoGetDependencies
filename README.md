@@ -1,1 +1,1 @@
-# CheckSceneDependencies Virt-A-Mate Plugin
+# AutoGetDependencies Virt-A-Mate Plugin

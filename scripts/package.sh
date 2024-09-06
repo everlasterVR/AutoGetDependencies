@@ -2,7 +2,7 @@
 
 set -eE -o functrace
 
-plugin_name="CheckSceneDependencies"
+plugin_name="AutoGetDependencies"
 work_dir="publish"
 
 failure() {
@@ -35,7 +35,6 @@ package_files() {
 
 update_version_info() {
   sed -i "s/0\.0\.0/$plugin_version/g" "$work_dir/meta.json"
-  sed -i "s/0\.0\.0/$plugin_version/g" "$resource_dir/src/Common/Script.cs"
 }
 
 hide_files() {

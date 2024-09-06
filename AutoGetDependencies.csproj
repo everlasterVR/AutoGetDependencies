@@ -7,8 +7,8 @@
         <ProjectGuid>{4C11FC39-F69F-45E4-ADE5-CFFFED726C42}</ProjectGuid>
         <OutputType>Library</OutputType>
         <AppDesignerFolder>Properties</AppDesignerFolder>
-        <RootNamespace>CheckSceneDependencies</RootNamespace>
-        <AssemblyName>CheckSceneDependencies</AssemblyName>
+        <RootNamespace>AutoGetDependencies</RootNamespace>
+        <AssemblyName>AutoGetDependencies</AssemblyName>
         <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
         <FileAlignment>512</FileAlignment>
     </PropertyGroup>
@@ -88,7 +88,7 @@
         <!--        </Reference>-->
     </ItemGroup>
     <ItemGroup>
-        <Compile Include="src\CheckSceneDependencies.cs" />
+        <Compile Include="src\AutoGetDependencies.cs" />
         <Compile Include="src\Extensions.cs" />
         <Compile Include="src\Utils\LogBuilder.cs" />
         <Compile Include="src\Utils\UnityEventsListener.cs" />

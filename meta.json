@@ -1,7 +1,7 @@
 {
   "licenseType": "PC",
   "creatorName": "everlaster",
-  "packageName": "CheckSceneDependencies",
+  "packageName": "AutoGetDependencies",
   "standardReferenceVersionOption": "Latest",
   "scriptReferenceVersionOption": "Exact",
   "description": "v0.0.0. ",
@@ -10,8 +10,8 @@
   "promotionalLink": "",
   "programVersion": "1.22.0.3",
   "contentList": [
-    "Custom/Scripts/everlaster/CheckSceneDependencies/CheckSceneDependencies.cslist",
-    "Custom/Scripts/everlaster/CheckSceneDependencies/src"
+    "Custom/Scripts/everlaster/AutoGetDependencies/AutoGetDependencies.cslist",
+    "Custom/Scripts/everlaster/AutoGetDependencies/src"
   ],
   "dependencies": {
   },
