@@ -89,8 +89,8 @@ namespace everlaster
                 }
 
                 _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", true);
-                _findDependenciesAction = new JSONStorableAction("1. Find dependencies", FindDependenciesCallback);
-                _downloadAction = new JSONStorableAction("2. Download missing", DownloadMissingCallback);
+                _findDependenciesAction = new JSONStorableAction("1. Find dependencies in meta.json", FindDependenciesCallback);
+                _downloadAction = new JSONStorableAction("2. Download missing packages", DownloadMissingCallback);
                 _infoString = new JSONStorableString("Info", "");
                 _logErrorsBool = new JSONStorableBool("Log errors", false);
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
@@ -138,11 +138,23 @@ namespace everlaster
             rect.anchoredPosition = pos;
 
             CreateToggle(_searchSubDependenciesBool);
-            _findDependenciesAction.RegisterButton(CreateButton(_findDependenciesAction.name));
-            _downloadAction.RegisterButton(CreateButton(_downloadAction.name));
+            {
+                var button = CreateButton(_findDependenciesAction.name);
+                button.height = 75;
+                _findDependenciesAction.RegisterButton(button);
+            }
+
+            CreateSpacer().height = 10;
             CreateTextField(_infoString, true).height = 1200;
             CreateToggle(_tempEnableHubBool);
             CreateToggle(_autoAcceptPackagePluginsBool);
+            {
+                var button = CreateButton(_downloadAction.name);
+                button.height = 75;
+                _downloadAction.RegisterButton(button);
+            }
+
+            CreateSpacer().height = 10;
             CreateToggle(_logErrorsBool);
         }
 
