@@ -100,7 +100,6 @@
         <None Include="README.md"/>
     </ItemGroup>
     <ItemGroup>
-        <Content Include="LICENSE" />
         <Content Include="scripts\generate_cslist.sh" />
         <Content Include="scripts\package.sh"/>
     </ItemGroup>
