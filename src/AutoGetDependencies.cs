@@ -28,6 +28,7 @@ namespace everlaster
         JSONStorableAction _findDependenciesAction;
         JSONStorableAction _downloadAction;
         JSONStorableString _infoString;
+        JSONStorableBool _autoAcceptPackagePluginsBool;
         JSONStorableBool _logErrorsBool;
 
         public override void InitUI()
@@ -91,10 +92,12 @@ namespace everlaster
                 _downloadAction = new JSONStorableAction("2. Download missing", DownloadMissingCallback);
                 _infoString = new JSONStorableString("Info", "");
                 _logErrorsBool = new JSONStorableBool("Log errors", false);
+                _autoAcceptPackagePluginsBool = new JSONStorableBool("Auto accept package plugins", false);
                 RegisterBool(_searchSubDependenciesBool);
                 RegisterAction(_findDependenciesAction);
                 RegisterAction(_downloadAction);
                 RegisterBool(_logErrorsBool);
+                RegisterBool(_autoAcceptPackagePluginsBool);
                 _initialized = true;
             }
             catch(Exception e)
@@ -135,6 +138,7 @@ namespace everlaster
             _findDependenciesAction.RegisterButton(CreateButton(_findDependenciesAction.name));
             _downloadAction.RegisterButton(CreateButton(_downloadAction.name));
             CreateTextField(_infoString, true).height = 1200;
+            CreateToggle(_autoAcceptPackagePluginsBool);
             CreateToggle(_logErrorsBool);
         }
 
@@ -293,18 +297,48 @@ namespace everlaster
                         obj.downloadButton.onClick.Invoke();
                     }
 
-                    while(!pendingPackages.TrueForAll(obj => obj.CheckExists()))
+                    while(!pendingPackages.TrueForAll(obj => obj.CheckExists())) // could take long
                     {
-                        yield return null; // could take long
+                        yield return null;
                     }
                 }
 
                 missingPackagesPanelT.transform.position = position;
                 missingPackagesPanelT.SetParent(hubBrowsePanelT);
                 missingPackagesPanelT.gameObject.SetActive(false);
+            }
 
+            // wait for user confirm panels
+            {
+                yield return null;
+                var activePanels = new List<GameObject>();
+                HandlePanelsInAlertRoot(SuperController.singleton.normalAlertRoot, activePanels);
+                HandlePanelsInAlertRoot(SuperController.singleton.worldAlertRoot, activePanels);
+                while(activePanels.Count > 0)
+                {
+                    try
+                    {
+                        HandlePanelsInAlertRoot(SuperController.singleton.normalAlertRoot, activePanels);
+                        HandlePanelsInAlertRoot(SuperController.singleton.worldAlertRoot, activePanels);
 
-                // TODO if any missing -> error -> trigger
+                        // cleanup
+                        for(int i = activePanels.Count - 1; i >= 0; i--)
+                        {
+                            var go = activePanels[i];
+                            if(go == null || !go.activeInHierarchy)
+                            {
+                                activePanels.RemoveAt(i);
+                            }
+                        }
+                    }
+                    catch(Exception e)
+                    {
+                        _logBuilder.Exception(e);
+                        break;
+                    }
+
+                    yield return null;
+                }
             }
 
             // finish
@@ -318,8 +352,35 @@ namespace everlaster
                 }
                 else
                 {
-                    Debug.Log("Some packages not downloaded.");
+                    Debug.Log("Some packages were not downloaded.");
                     // TODO trigger on timeout/error
+                }
+            }
+        }
+
+        void HandlePanelsInAlertRoot(Transform root, List<GameObject> activePanels)
+        {
+            foreach(Transform child in root)
+            {
+                if(child.name != "OKCancelAlertPanel(Clone)")
+                {
+                    continue;
+                }
+
+                var textComponent = child.Find("Panel/Text").GetComponent<Text>();
+                if(textComponent.text.Contains("'Allow Plugins Network Access'"))
+                {
+                    continue; // wrong panel, if this comes up the user must accept it manually
+                }
+
+                var go = child.gameObject;
+                if(go.activeInHierarchy && !activePanels.Contains(go))
+                {
+                    activePanels.Add(go);
+                    if(_autoAcceptPackagePluginsBool.val)
+                    {
+                        child.Find("Panel/OKButton").GetComponent<Button>().onClick.Invoke();
+                    }
                 }
             }
         }
