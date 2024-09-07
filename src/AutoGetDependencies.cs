@@ -163,6 +163,7 @@ namespace everlaster
 
         void FindDependenciesCallback()
         {
+            SuperController.singleton.RescanPackages();
             _packages.Clear();
             FindDependencies(_metaJson, _searchSubDependenciesBool.val);
             var sb = new StringBuilder();
