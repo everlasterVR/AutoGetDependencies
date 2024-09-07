@@ -291,29 +291,22 @@ namespace everlaster
                 yield break;
             }
 
-            // empty any existing package download panels for detecting when they are recreated; MissingPackagesPanel will recreate them
-            try
+            var objectsVamWillDestroy = new List<GameObject>();
+            foreach(Transform packageDownloadPanel in contentT)
             {
-                foreach(Transform child in contentT)
-                {
-                    var resourceButtonTextT = child.Find("HorizontalLayout/MainContainer/ResourceButton/Text");
-                    if(resourceButtonTextT != null)
-                    {
-                        resourceButtonTextT.GetComponent<Text>().text = "";
-                    }
-                    else
-                    {
-                        _logBuilder.Debug("ResourceButton transform not found");
-                    }
-                }
-            }
-            catch(Exception e)
-            {
-                _logBuilder.Exception(e);
-                yield break;
+                objectsVamWillDestroy.Add(packageDownloadPanel.gameObject);
             }
 
             _hubBrowse.CallAction("OpenMissingPackagesPanel");
+
+            // wait for VAM to destroy panels from a previous scan
+            int objCount = objectsVamWillDestroy.Count;
+            int frameCountStart = Time.frameCount;
+            while(!objectsVamWillDestroy.TrueForAll(go => go == null))
+            {
+                yield return null;
+            }
+            _logBuilder.Debug($"Waited {Time.frameCount - frameCountStart} frames for VAM to destroy {objCount} panels");
 
             // wait for HubBrowsePanel to be active
             {
@@ -384,47 +377,38 @@ namespace everlaster
                 var position = missingPackagesPanelT.transform.position;
                 missingPackagesPanelT.transform.position = new Vector3(position.x, position.y - 1000, position.z);
 
-                if(contentT == null)
+                float timeout = Time.time + _timeoutFloat.val;
+                string errorStr = ParseMissingPackagesUI(contentT);
+                while(errorStr != null && Time.time < timeout)
                 {
-                    if(_logErrorsBool.val) _logBuilder.Error("Content transform not found");
+                    yield return null;
+                    errorStr = ParseMissingPackagesUI(contentT);
+                }
+
+                if(errorStr != null)
+                {
+                    if(_logErrorsBool.val) _logBuilder.Error(errorStr);
                     error = true;
                 }
 
+                // download missing packages
                 if(!error)
                 {
-                    float timeout = Time.time + _timeoutFloat.val;
-                    string errorStr = ParseMissingPackagesUI(contentT);
-                    while(errorStr != null && Time.time < timeout)
+                    var pendingPackages = _packages.Where(obj => obj.pending).ToList();
+                    foreach(var obj in pendingPackages)
+                    {
+                        obj.downloadButton.onClick.Invoke();
+                    }
+
+                    while(!pendingPackages.TrueForAll(obj => obj.CheckExists()) && Time.time < timeout) // could take long
                     {
                         yield return null;
-                        errorStr = ParseMissingPackagesUI(contentT);
                     }
 
-                    if(errorStr != null)
+                    if(!pendingPackages.TrueForAll(obj => obj.exists))
                     {
-                        if(_logErrorsBool.val) _logBuilder.Error(errorStr);
-                        error = true;
-                    }
-
-                    // download missing packages
-                    if(!error)
-                    {
-                        var pendingPackages = _packages.Where(obj => obj.pending).ToList();
-                        foreach(var obj in pendingPackages)
-                        {
-                            obj.downloadButton.onClick.Invoke();
-                        }
-
-                        while(!pendingPackages.TrueForAll(obj => obj.CheckExists()) && Time.time < timeout) // could take long
-                        {
-                            yield return null;
-                        }
-
-                        if(!pendingPackages.TrueForAll(obj => obj.exists))
-                        {
-                            if(_logErrorsBool.val) _logBuilder.Error("Timed out before downloads finished.");
-                            // error = true;
-                        }
+                        if(_logErrorsBool.val) _logBuilder.Error("Timed out before downloads finished.");
+                        // error = true;
                     }
                 }
 
@@ -597,7 +581,6 @@ namespace everlaster
                     if(notOnHubT != null && notOnHubT.gameObject.activeSelf)
                     {
                         _logBuilder.Debug($"{packageId}: Not on Hub");
-                        continue;
                     }
 
                     continue;
