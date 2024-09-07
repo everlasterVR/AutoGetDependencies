@@ -259,7 +259,6 @@ namespace everlaster
         IEnumerator DownloadMissingViaHubCo()
         {
             _infoString.val = "Downloading missing packages...\n";
-            _hubBrowse.CallAction("OpenMissingPackagesPanel");
             bool hubWasTempEnabled = false;
             if(_tempEnableHubBool.val && !_hubBrowse.HubEnabled)
             {
@@ -275,10 +274,50 @@ namespace everlaster
                 yield break;
             }
 
+            var missingPackagesPanelT = hubBrowsePanelT.Find("MissingPackagesPanel");
+            if(missingPackagesPanelT == null)
+            {
+                if(_logErrorsBool.val) _logBuilder.Error("HubBrowsePanel/MissingPackagesPanel not found");
+                _infoString.val = "";
+                yield break;
+            }
+
+            var contentT = missingPackagesPanelT.Find("InnerPanel/HubDownloads/Downloads/Viewport/Content");
+            if(contentT == null)
+            {
+                if(_logErrorsBool.val) _logBuilder.Error("HubBrowsePanel/MissingPackagesPanel/InnerPanel/HubDownloads/Downloads/Viewport/Content transform not found");
+                _infoString.val = "";
+                yield break;
+            }
+
+            // empty any existing package download panels for detecting when they are recreated; MissingPackagesPanel will recreate them
+            try
+            {
+                foreach(Transform child in contentT)
+                {
+                    var resourceButtonTextT = child.Find("HorizontalLayout/MainContainer/ResourceButton/Text");
+                    if(resourceButtonTextT != null)
+                    {
+                        resourceButtonTextT.GetComponent<Text>().text = "";
+                    }
+                    else
+                    {
+                        _logBuilder.Debug("ResourceButton transform not found");
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                _logBuilder.Exception(e);
+                yield break;
+            }
+
+            _hubBrowse.CallAction("OpenMissingPackagesPanel");
+
             // wait for HubBrowsePanel to be active
             {
                 float timeout = Time.time + 10;
-                while((hubBrowsePanelT == null || !hubBrowsePanelT.gameObject.activeInHierarchy) && Time.time < timeout)
+                while(!hubBrowsePanelT.gameObject.activeInHierarchy && Time.time < timeout)
                 {
                     yield return null;
                     hubBrowsePanelT = _hubBrowse.UITransform;
@@ -286,7 +325,7 @@ namespace everlaster
 
                 if(Time.time >= timeout)
                 {
-                    if(_logErrorsBool.val) _logBuilder.Error("Timeout: HubBrowsePanel not found or active");
+                    if(_logErrorsBool.val) _logBuilder.Error("Timeout: HubBrowsePanel not active");
                     _infoString.val = "";
                     yield break;
                 }
@@ -337,7 +376,6 @@ namespace everlaster
             bool error = false;
             // execute main part
             {
-                var missingPackagesPanelT = hubBrowsePanelT.Find("MissingPackagesPanel");
                 missingPackagesPanelT.SetParent(transform);
                 _hubBrowse.Hide();
 
@@ -345,7 +383,6 @@ namespace everlaster
                 var position = missingPackagesPanelT.transform.position;
                 missingPackagesPanelT.transform.position = new Vector3(position.x, position.y - 1000, position.z);
 
-                var contentT = missingPackagesPanelT.Find("InnerPanel/HubDownloads/Downloads/Viewport/Content");
                 if(contentT == null)
                 {
                     if(_logErrorsBool.val) _logBuilder.Error("Content transform not found");
@@ -553,13 +590,19 @@ namespace everlaster
                 }
 
                 string resourceId = resourceButtonText.GetComponent<Text>().text;
-                int versionSeparatorIdx = resourceId.LastIndexOf(".", StringComparison.Ordinal);
-                if(versionSeparatorIdx == -1)
+                if(resourceId == packageId) // .latest matches .latest
                 {
-                    _logBuilder.Debug($"{packageId}: Invalid Hub resource: {packageId}");
+                    var notOnHubT = container.Find("NotOnHub");
+                    if(notOnHubT != null && notOnHubT.gameObject.activeSelf)
+                    {
+                        _logBuilder.Debug($"{packageId}: Not on Hub");
+                        continue;
+                    }
+
                     continue;
                 }
 
+                int versionSeparatorIdx = resourceId.LastIndexOf(".", StringComparison.Ordinal);
                 string resourceBaseName = resourceId.Substring(0, versionSeparatorIdx);
                 if(resourceBaseName == packageBaseName)
                 {
