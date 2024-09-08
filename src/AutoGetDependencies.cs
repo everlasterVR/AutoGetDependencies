@@ -23,8 +23,13 @@ namespace everlaster
         readonly List<PackageObj> _pendingPackages = new List<PackageObj>();
         readonly List<PackageObj> _notOnHubPackages = new List<PackageObj>();
         bool _initialized;
+        bool _anyMissing;
+        bool _anyUpdateNeeded;
         Coroutine _downloadCo;
-        bool _hadError;
+        Coroutine _handleUserConfirmPanelsCo;
+        bool _finished;
+        string _error;
+        float _progress;
 
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableBool _alwaysCheckForUpdatesBool;
@@ -32,9 +37,10 @@ namespace everlaster
         JSONStorableString _infoString;
         JSONStorableBool _tempEnableHubBool;
         JSONStorableBool _autoAcceptPackagePluginsBool;
-        JSONStorableFloat _timeoutFloat;
         JSONStorableAction _downloadAction;
+        JSONStorableFloat _progressFloat; // TODO select UISlider from scene to act as progress bar (copy UISliderSync)
         JSONStorableBool _logErrorsBool;
+        // TODO action to trigger teardown in case of infinite yield return null
 
         public override void InitUI()
         {
@@ -62,9 +68,13 @@ namespace everlaster
                 _uiCreated = true;
             }
 
-            if(_dependenciesFound)
+            if(_anyMissing || _anyUpdateNeeded)
             {
-                UpdateInfo();
+                UpdatePendingInfo();
+            }
+            else if(_finished)
+            {
+                UpdateFinishedInfo();
             }
         }
 
@@ -98,20 +108,30 @@ namespace everlaster
                 }
 
                 _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", false);
-                _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates", false);
-                _findDependenciesAction = new JSONStorableAction("1. Find dependencies in meta.json", FindDependenciesCallback);
-                _infoString = new JSONStorableString("Info", "");
-                _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
-                _autoAcceptPackagePluginsBool = new JSONStorableBool("Auto-accept package plugins", false);
-                _timeoutFloat = new JSONStorableFloat("Timeout (seconds)", 120, 1, 600);
-                _downloadAction = new JSONStorableAction("2. Download missing packages", DownloadMissingCallback);
-                _logErrorsBool = new JSONStorableBool("Log errors", false);
                 RegisterBool(_searchSubDependenciesBool);
+
+                _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false);
+                RegisterBool(_alwaysCheckForUpdatesBool);
+
+                _findDependenciesAction = new JSONStorableAction("1. Find dependencies in meta.json", FindDependenciesCallback);
                 RegisterAction(_findDependenciesAction);
-                RegisterAction(_downloadAction);
-                RegisterBool(_logErrorsBool);
+
+                _infoString = new JSONStorableString("Info", "");
+
+                _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
                 RegisterBool(_tempEnableHubBool);
+
+                _autoAcceptPackagePluginsBool = new JSONStorableBool("Auto-accept package plugins", false);
                 RegisterBool(_autoAcceptPackagePluginsBool);
+
+                _downloadAction = new JSONStorableAction("2. Download missing packages", DownloadMissingCallback);
+                RegisterAction(_downloadAction);
+
+                _progressFloat = new JSONStorableFloat("Download progress (%)", 0, 0, 100);
+
+                _logErrorsBool = new JSONStorableBool("Log errors", false);
+                RegisterBool(_logErrorsBool);
+
                 _initialized = true;
             }
             catch(Exception e)
@@ -161,16 +181,23 @@ namespace everlaster
             CreateSpacer().height = 15;
             CreateToggle(_tempEnableHubBool);
             CreateToggle(_autoAcceptPackagePluginsBool);
-            CreateSlider(_timeoutFloat).valueFormat = "F0";
             {
                 var button = CreateButton(_downloadAction.name);
                 button.height = 75;
                 _downloadAction.RegisterButton(button);
             }
 
+            {
+                var uiDynamic = CreateSlider(_progressFloat);
+                uiDynamic.valueFormat = "F0";
+                uiDynamic.HideButtons();
+                uiDynamic.SetInteractable(false);
+            }
+
             CreateSpacer().height = 15;
             CreateToggle(_logErrorsBool);
 
+            // TODO plugin usage info
             {
                 var infoField = Instantiate(manager.configurableTextFieldPrefab, UITransform);
                 var uiDynamic = infoField.GetComponent<UIDynamicTextField>();
@@ -191,26 +218,45 @@ namespace everlaster
             }
         }
 
-        bool _dependenciesFound;
-
         void FindDependenciesCallback()
         {
+            if(_downloadCo != null)
+            {
+                StopCoroutine(_downloadCo);
+            }
+
+            _finished = false;
+            _error = null;
+            _progress = 0;
+            _progressFloat.val = 0;
             SuperController.singleton.RescanPackages();
             _packages.Clear();
             FindDependencies(_metaJson, _searchSubDependenciesBool.val);
-            UpdateInfo();
-            _dependenciesFound = true;
+
+            // TODO find any disabled dependencies and call trigger
+
+            _anyMissing = _packages.Exists(obj => !obj.exists);
+            _anyUpdateNeeded = _packages.Exists(obj => obj.exists && obj.requireLatest && (_alwaysCheckForUpdatesBool.val || _anyMissing));
+            if(_anyMissing || _anyUpdateNeeded)
+            {
+                Debug.Log("TODO trigger on dependencies found & pending download");
+                // TODO trigger on dependencies found & pending download
+                UpdatePendingInfo();
+            }
+            else
+            {
+                _progress = 1;
+                _progressFloat.val = 100;
+                Debug.Log("TODO trigger on success");
+                // TODO trigger on success
+                UpdateFinishedInfo();
+            }
         }
 
         void FindDependencies(JSONClass json, bool recursive = false, int depth = 0)
         {
             try
             {
-                if(_downloadCo != null)
-                {
-                    StopCoroutine(_downloadCo);
-                }
-
                 var dependenciesJc = json["dependencies"].AsObject;
                 if(dependenciesJc == null)
                 {
@@ -243,50 +289,47 @@ namespace everlaster
             }
         }
 
-        void UpdateInfo()
+        void UpdatePendingInfo()
         {
             if(!_uiCreated)
             {
                 return;
             }
 
+            _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
             var sb = new StringBuilder();
-            bool anyMissing = false;
-            bool anyUpdateNeeded = false;
-            AppendPackageInfo(
+
+            AppendPackagesInfo(
                 sb,
                 "Missing, download needed",
                 new Color(0.75f, 0, 0),
-                obj => anyMissing = !obj.exists
+                _packages,
+                obj => !obj.exists
             );
-            AppendPackageInfo(
+            AppendPackagesInfo(
                 sb,
                 "Found, check for update needed",
                 new Color(0, 0, 0.50f),
-                obj => anyUpdateNeeded = obj.exists && obj.requireLatest && (_alwaysCheckForUpdatesBool.val || anyMissing)
+                _packages,
+                obj => obj.exists && obj.requireLatest && (_alwaysCheckForUpdatesBool.val || _anyMissing)
             );
-            AppendPackageInfo(
+            AppendPackagesInfo(
                 sb,
                 "Found",
                 new Color(0, 0.50f, 0),
+                _packages,
                 obj => obj.exists
             );
-
-            if(!anyMissing && !anyUpdateNeeded)
-            {
-                sb.Append("\n\nAll dependencies installed. TODO configurable trigger");
-                _logBuilder.Message("All dependencies installed. TODO configurable trigger");
-            }
 
             _infoString.val = sb.ToString();
         }
 
-        void AppendPackageInfo(StringBuilder sb, string title, Color titleColor, Func<PackageObj, bool> condition)
+        static void AppendPackagesInfo(StringBuilder sb, string title, Color titleColor, List<PackageObj> packages, Func<PackageObj, bool> condition)
         {
             sb.AppendFormat("<size=28><color=#{0}><b>{1}:</b></color></size>\n\n", ColorUtility.ToHtmlStringRGBA(titleColor), title);
             int count = 0;
             string optionalColor = ColorUtility.ToHtmlStringRGBA(new Color(0.4f, 0.4f, 0.4f));
-            foreach (var obj in _packages)
+            foreach (var obj in packages)
             {
                 if (condition(obj))
                 {
@@ -306,26 +349,47 @@ namespace everlaster
             sb.Append("\n");
         }
 
-        void DownloadMissingCallback()
+        void UpdateFinishedInfo()
         {
+            if(!_uiCreated)
+            {
+                return;
+            }
+
+            _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Wrap;
+            var sb = new StringBuilder();
+
+            sb.Append(
+                _packages.TrueForAll(obj => obj.exists)
+                    ? "All dependencies are successfully installed.\n"
+                    : "Some dependencies are still missing.\n"
+            );
+
+            if(_error != null)
+            {
+                sb.Append("\nErrors:\n");
+                sb.Append(_error);
+                sb.Append("\n\n");
+            }
+
+            AppendPackagesInfo(
+                sb,
+                "Not on Hub",
+                new Color(0.75f, 0, 0),
+                _notOnHubPackages,
+                obj => true
+            );
+
+            if(sb.Length > 16000)
+            {
+                const string truncated = "\n\n(too long, truncated)";
+                sb.Length = 16000 - truncated.Length;
+                sb.Append(truncated);
+            }
+
             try
             {
-                if(!_dependenciesFound)
-                {
-                    _infoString.val = "Must find dependencies first.";
-                    if(_logErrorsBool.val) _logBuilder.Error("Must find dependencies first.");
-                    return;
-                }
-
-                if(_packages.TrueForAll(obj => obj.exists))
-                {
-                    UpdateInfo();
-                    // TODO trigger on download complete
-                    return;
-                }
-
-                _downloadCo = StartCoroutine(DownloadMissingViaHubCo());
-                _dependenciesFound = false;
+                _infoString.val = sb.ToString();
             }
             catch(Exception e)
             {
@@ -333,19 +397,45 @@ namespace everlaster
             }
         }
 
-        void OnError(string message)
+        void DownloadMissingCallback()
         {
-            if (_logErrorsBool.val) _logBuilder.Error(message);
-            _infoString.val = "";
-            _hadError = true;
+            if(!_anyMissing && !_anyUpdateNeeded)
+            {
+                // TODO .. ?
+                _infoString.val = "All dependencies are already installed.";
+                if(_logErrorsBool.val) _logBuilder.Error("Must find dependencies first.");
+                return;
+            }
+
+            _downloadCo = StartCoroutine(DownloadMissingViaHubCo());
         }
 
-        void OnException(Exception e)
+        void OnError(string message, bool teardown = true)
+        {
+            if (_logErrorsBool.val) _logBuilder.Error(message);
+            _error = $"\n{message}";
+            if(teardown)
+            {
+                Teardown();
+            }
+        }
+
+        void OnException(Exception e, bool teardown = true)
         {
             if (_logErrorsBool.val) _logBuilder.Exception(e);
-            _infoString.val = "";
-            _hadError = true;
+            _error += $"\n{e.Message}";
+            if(teardown)
+            {
+                Teardown();
+            }
         }
+
+        bool _panelRelocated;
+        bool _hubWasTempEnabled;
+        Transform _hubBrowsePanelT;
+        Transform _missingPackagesPanelT;
+        Transform _contentT;
+        Vector3 _originalPanelPos;
 
         IEnumerator DownloadMissingViaHubCo()
         {
@@ -354,12 +444,8 @@ namespace everlaster
             _missingPackages.Clear();
             _pendingPackages.Clear();
             _notOnHubPackages.Clear();
-
-            bool hubWasTempEnabled = false;
-            Transform hubBrowsePanelT;
-            Transform missingPackagesPanelT;
-            Transform contentT;
-            _hadError = false;
+            _panelRelocated = false;
+            _error = null;
 
             try
             {
@@ -367,25 +453,25 @@ namespace everlaster
                 if(_tempEnableHubBool.val && !_hubBrowse.HubEnabled)
                 {
                     _hubBrowse.HubEnabled = true;
-                    hubWasTempEnabled = true;
+                    _hubWasTempEnabled = true;
                 }
 
-                hubBrowsePanelT = _hubBrowse.UITransform;
-                if (hubBrowsePanelT == null)
+                _hubBrowsePanelT = _hubBrowse.UITransform;
+                if (_hubBrowsePanelT == null)
                 {
                     OnError("HubBrowsePanel not found");
                     yield break;
                 }
 
-                missingPackagesPanelT = hubBrowsePanelT.Find("MissingPackagesPanel");
-                if (missingPackagesPanelT == null)
+                _missingPackagesPanelT = _hubBrowsePanelT.Find("MissingPackagesPanel");
+                if (_missingPackagesPanelT == null)
                 {
                     OnError("MissingPackagesPanel not found");
                     yield break;
                 }
 
-                contentT = missingPackagesPanelT.Find("InnerPanel/HubDownloads/Downloads/Viewport/Content");
-                if (contentT == null)
+                _contentT = _missingPackagesPanelT.Find("InnerPanel/HubDownloads/Downloads/Viewport/Content");
+                if (_contentT == null)
                 {
                     OnError("InnerPanel/HubDownloads/Downloads/Viewport/Content not found");
                     yield break;
@@ -400,7 +486,7 @@ namespace everlaster
 
 #region OpenMissingPackagesPanel
             var objectsVamWillDestroy = new List<GameObject>();
-            foreach(Transform packageDownloadPanel in contentT)
+            foreach(Transform packageDownloadPanel in _contentT)
             {
                 if(packageDownloadPanel != null)
                 {
@@ -411,13 +497,13 @@ namespace everlaster
             _hubBrowse.CallAction("OpenMissingPackagesPanel");
 
             // hide panel
-            Vector3 originalPos;
             {
-                missingPackagesPanelT.SetParent(transform);
+                _missingPackagesPanelT.SetParent(transform);
                 _hubBrowse.Hide();
                 SuperController.singleton.DeactivateWorldUI();
-                originalPos = missingPackagesPanelT.transform.position;
-                missingPackagesPanelT.transform.position = new Vector3(originalPos.x, originalPos.y - 1000, originalPos.z);
+                _originalPanelPos = _missingPackagesPanelT.transform.position;
+                _missingPackagesPanelT.transform.position = new Vector3(_originalPanelPos.x, _originalPanelPos.y - 1000, _originalPanelPos.z);
+                _panelRelocated = true;
             }
 
             // wait for VAM to destroy package download panels from a previous scan
@@ -438,7 +524,7 @@ namespace everlaster
             // wait for package download panels to exist
             {
                 float timeout = Time.time + 5;
-                while(contentT.childCount == 0 && Time.time < timeout)
+                while(_contentT.childCount == 0 && Time.time < timeout)
                 {
                     yield return null;
                 }
@@ -451,12 +537,12 @@ namespace everlaster
             }
 
             // wait for Hub to be enabled
-            bool waitForRefresh = hubWasTempEnabled;
+            bool waitForRefresh = _hubWasTempEnabled;
             if(!_hubBrowse.HubEnabled)
             {
                 yield return null;
-                var indicator = hubBrowsePanelT.Find("HubDisabledIndicator");
-                if(indicator == null)
+                var indicator = _hubBrowsePanelT.Find("HubDisabledIndicator");
+                if(indicator == null || indicator.gameObject == null)
                 {
                     OnError("HubDisabledIndicator not found");
                     yield break;
@@ -466,8 +552,7 @@ namespace everlaster
                 {
                     if(!indicator.gameObject.activeInHierarchy)
                     {
-                        // TODO OnError?
-                        _infoString.val = "";
+                        Teardown();
                         yield break; // exiting - user kept Hub disabled
                     }
 
@@ -480,8 +565,8 @@ namespace everlaster
             // wait for refreshing panel to disappear
             if(waitForRefresh)
             {
-                var refreshingPanelT = hubBrowsePanelT.Find("GetInfoRefrehsingPanel"); // sic
-                if(refreshingPanelT == null)
+                var refreshingPanelT = _hubBrowsePanelT.Find("GetInfoRefrehsingPanel"); // sic
+                if(refreshingPanelT == null || refreshingPanelT.gameObject == null)
                 {
                     OnError("GetInfoRefrehsingPanel not found");
                     yield break;
@@ -495,22 +580,19 @@ namespace everlaster
             }
 #endregion OpenMissingPackagesPanel
 
-#region DownloadLogic
             /*
-             * round 1
              * - if .#, find container by exact name match
              * - if .latest, find container by base name match and select latest version
              *  - if In Library, flag as exists
              *  - if found but Not On Hub, flag as notOnHub
              *  - if on Hub, save exact package id
-             *
-             * round 2
-             *
              */
 
+#region PreDownload
             // populate lists
+            try
             {
-                foreach(Transform packageDownloadPanel in contentT)
+                foreach(Transform packageDownloadPanel in _contentT)
                 {
                     var packageUI = packageDownloadPanel.GetComponent<HubResourcePackageUI>();
                     if(packageUI == null)
@@ -527,6 +609,11 @@ namespace everlaster
                 {
                     _missingPackages.AddRange(_packages.Where(obj => !_missingPackages.Contains(obj) && obj.requireLatest));
                 }
+            }
+            catch(Exception e)
+            {
+                OnException(e);
+                yield break;
             }
 
             // match missing packages to correct hub resources
@@ -578,137 +665,190 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                Debug.Log($"Exception during matching: {e}");
                 OnException(e);
-                // TODO break or teardown?
+                yield break;
             }
 
-            // foreach(var obj in _missingPackages)
-            // {
-            //     Debug.Log(obj.ToString());
-            //     Debug.Log(DevUtils.ObjectPropertiesString(obj.connectedItem));
-            // }
-
-            // download missing packages
-            foreach(var obj in _missingPackages)
+            // split into groups
+            try
             {
-                if(obj.error != null)
+                foreach(var obj in _missingPackages)
                 {
-                    if(_logErrorsBool.val) _logBuilder.Error($"Error in dependency {obj.name}: {obj.error}");
-                    _hadError = true;
-                    continue;
-                }
+                    // Debug.Log(obj.ToString());
+                    // Debug.Log(DevUtils.ObjectPropertiesString(obj.connectedItem));
 
-                if(!obj.connectedItem.NeedsDownload)
-                {
-                    obj.CheckExists();
-                }
-                else if(obj.connectedItem.CanBeDownloaded)
-                {
-                    _pendingPackages.Add(obj);
-                }
-                else
-                {
-                    _notOnHubPackages.Add(obj);
-                }
-            }
-
-            foreach(var obj in _pendingPackages)
-            {
-                if(obj.packageUI.downloadButton != null)
-                {
-                    Debug.Log("Would click download button for " + obj.name);
-                }
-                else
-                {
-                    Debug.Log("No download button for " + obj.name);
-                }
-                // obj.downloadButton.onClick.Invoke();
-            }
-
-            foreach(var obj in _notOnHubPackages)
-            {
-                Debug.Log($"Not on Hub: {obj.name}");
-            }
-
-            // TODO replace timeout with progress bar
-            {
-                float timeout = Time.time + _timeoutFloat.val;
-                while(_pendingPackages.Any(obj => !obj.CheckExists()) && Time.time < timeout) // could take long
-                {
-                    yield return null;
-                }
-
-                if(_pendingPackages.Any(obj => !obj.exists))
-                {
-                    if(_logErrorsBool.val) _logBuilder.Error("Timed out before downloads finished.");
-                    // error = true;
-                }
-            }
-
-#endregion DownloadLogic
-
-#region Teardown
-            // restore panel parent and position, and hide
-            {
-                missingPackagesPanelT.transform.position = originalPos;
-                missingPackagesPanelT.SetParent(hubBrowsePanelT);
-                missingPackagesPanelT.gameObject.SetActive(false);
-            }
-
-            // wait for user confirm panels
-            {
-                yield return null;
-                var activePanels = new List<GameObject>();
-                HandlePanelsInAlertRoot(SuperController.singleton.normalAlertRoot, activePanels);
-                HandlePanelsInAlertRoot(SuperController.singleton.worldAlertRoot, activePanels);
-                while(activePanels.Count > 0)
-                {
-                    try
+                    if(obj.error != null)
                     {
-                        HandlePanelsInAlertRoot(SuperController.singleton.normalAlertRoot, activePanels);
-                        HandlePanelsInAlertRoot(SuperController.singleton.worldAlertRoot, activePanels);
-
-                        // cleanup
-                        for(int i = activePanels.Count - 1; i >= 0; i--)
+                        string error = $"'{obj.name}' error: {obj.error}";
+                        if(_logErrorsBool.val) _logBuilder.Error(error);
+                        _error += $"\n{error}";
+                        if(!obj.connectedItem.CanBeDownloaded)
                         {
-                            var go = activePanels[i];
-                            if(go == null || !go.activeInHierarchy)
-                            {
-                                activePanels.RemoveAt(i);
-                            }
+                            _notOnHubPackages.Add(obj);
                         }
+
+                        continue;
                     }
-                    catch(Exception e)
+
+                    if(!obj.connectedItem.NeedsDownload)
                     {
-                        _logBuilder.Exception(e);
+                        _logBuilder.Debug($"{obj.name} item NeedsDownload=False");
+                        continue;
+                    }
+
+                    if(obj.connectedItem.CanBeDownloaded)
+                    {
+                        _pendingPackages.Add(obj);
+                    }
+                    else
+                    {
+                        _notOnHubPackages.Add(obj);
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                OnException(e);
+                yield break;
+            }
+
+#endregion PreDownload
+
+#region Download
+            int count = _pendingPackages.Count;
+            if(count <= 0)
+            {
+                OnError("No packages can be downloaded.");
+                yield break;
+            }
+
+            // setup callbacks and start downloads
+            try
+            {
+                foreach(var obj in _pendingPackages)
+                {
+                    MVR.Hub.HubResourcePackage.DownloadStartCallback startCallback = _ => obj.downloadStarted = true;
+                    MVR.Hub.HubResourcePackage.DownloadCompleteCallback completeCallback = (_, __) => obj.downloadComplete = true;
+                    MVR.Hub.HubResourcePackage.DownloadErrorCallback errorCallback = (_, e) => obj.downloadError = e;
+                    obj.connectedItem.downloadStartCallback += startCallback;
+                    obj.connectedItem.downloadCompleteCallback += completeCallback;
+                    obj.connectedItem.downloadErrorCallback += errorCallback;
+                    obj.storeStartCallback = startCallback;
+                    obj.storeCompleteCallback = completeCallback;
+                    obj.storeErrorCallback = errorCallback;
+                    obj.packageUI.downloadButton.onClick.Invoke();
+                }
+            }
+            catch(Exception e)
+            {
+                OnException(e);
+                yield break;
+            }
+
+            // wait for downloads to complete
+            var wait = new WaitForSeconds(0.1f);
+            while(true)
+            {
+                try
+                {
+                    float sum = 0;
+                    bool allDone = true;
+                    for(int i = _pendingPackages.Count - 1; i >= 0; i--)
+                    {
+                        var obj = _pendingPackages[i];
+                        if(obj.downloadComplete)
+                        {
+                            sum += 1;
+                            continue;
+                        }
+
+                        if(obj.downloadError != null)
+                        {
+                            if(_logErrorsBool.val) _logBuilder.Error($"'{obj.name}' error: {obj.downloadError}");
+                            _error += $"\n'{obj.name}' error: {obj.downloadError}";
+                            _pendingPackages.RemoveAt(i);
+                            continue;
+                        }
+
+                        if(obj.downloadStarted)
+                        {
+                            var slider = obj.packageUI.progressSlider;
+                            sum += Mathf.InverseLerp(slider.minValue, slider.maxValue, slider.value);
+                        }
+
+                        allDone = false;
+                    }
+
+                    _progress = sum / count;
+                    _progressFloat.val = _progress * 100;
+                    if(allDone)
+                    {
                         break;
                     }
-
-                    yield return null;
                 }
+                catch(Exception e)
+                {
+                    OnException(e, false);
+                    break;
+                }
+
+                yield return wait;
+            }
+#endregion Download
+
+            _handleUserConfirmPanelsCo = StartCoroutine(WaitForUserConfirmPanels());
+            if(_error == null)
+            {
+                yield return _handleUserConfirmPanelsCo;
             }
 
-            if(hubWasTempEnabled)
+            Teardown();
+        }
+
+#region Teardown
+        IEnumerator WaitForUserConfirmPanels()
+        {
+            yield return null;
+            var activePanels = new List<GameObject>();
+            try
             {
-                _hubBrowse.HubEnabled = false;
+                HandlePanelsInAlertRoot(SuperController.singleton.normalAlertRoot, activePanels);
+                HandlePanelsInAlertRoot(SuperController.singleton.worldAlertRoot, activePanels);
+            }
+            catch(Exception e)
+            {
+                _logBuilder.Exception(e);
+                _handleUserConfirmPanelsCo = null;
+                yield break;
             }
 
-            _downloadCo = null;
-            // _findDependenciesAction.actionCallback(); // TODO appropriate?
-            if(_packages.TrueForAll(obj => obj.exists))
+            while(activePanels.Count > 0)
             {
-                // TODO trigger on download complete
+                try
+                {
+                    HandlePanelsInAlertRoot(SuperController.singleton.normalAlertRoot, activePanels);
+                    HandlePanelsInAlertRoot(SuperController.singleton.worldAlertRoot, activePanels);
+
+                    // cleanup
+                    for(int i = activePanels.Count - 1; i >= 0; i--)
+                    {
+                        var go = activePanels[i];
+                        if(go == null || !go.activeInHierarchy)
+                        {
+                            activePanels.RemoveAt(i);
+                        }
+                    }
+                }
+                catch(Exception e)
+                {
+                    _logBuilder.Exception(e);
+                    break;
+                }
+
+                yield return null;
             }
-            else
-            {
-                // TODO fix
-                const string info ="\n\nSomething went wrong (timeout or error).\n\nPackages may still be downloading in the background.\n\nTODO configurable trigger on timeout/error";
-                _infoString.val += info;
-                _logBuilder.Message(info);
-                // TODO trigger on timeout/error
-            }
-#endregion Teardown
+
+            _handleUserConfirmPanelsCo = null;
         }
 
         void HandlePanelsInAlertRoot(Transform root, List<GameObject> activePanels)
@@ -738,6 +878,58 @@ namespace everlaster
             }
         }
 
+        void Teardown()
+        {
+            if(_panelRelocated && _missingPackagesPanelT != null && _missingPackagesPanelT.gameObject != null && _hubBrowsePanelT != null)
+            {
+                _missingPackagesPanelT.position = _originalPanelPos;
+                _missingPackagesPanelT.SetParent(_hubBrowsePanelT);
+                _missingPackagesPanelT.gameObject.SetActive(false);
+                _panelRelocated = false;
+            }
+
+            foreach(var obj in _missingPackages)
+            {
+                obj.CleanupCallbacks();
+            }
+
+            if(_hubWasTempEnabled)
+            {
+                _hubBrowse.HubEnabled = false;
+                _hubWasTempEnabled = false;
+            }
+
+            foreach(var obj in _packages)
+            {
+                obj.CheckExists();
+            }
+
+            // suppress error triggers and not on Hub packages triggers if all packages happen to somehow exist regardless
+            if(_packages.TrueForAll(obj => obj.exists))
+            {
+                // TODO trigger on success
+            }
+            else
+            {
+                if(_notOnHubPackages.Count > 0)
+                {
+                    // TODO trigger on not on Hub packages found
+                    // TODO send list of not on Hub packages to UIText
+                    // TODO provide a triggerable action for copying the not on Hub package names to clipboard
+                }
+
+                if(_error != null)
+                {
+                    // TODO trigger on errors
+                }
+            }
+
+            _downloadCo = null;
+            _finished = true;
+            UpdateFinishedInfo();
+        }
+#endregion Teardown
+
         void OnDestroy()
         {
             if(_uiListener != null)
@@ -748,6 +940,11 @@ namespace everlaster
             if(_downloadCo != null)
             {
                 StopCoroutine(_downloadCo);
+            }
+
+            if(_handleUserConfirmPanelsCo != null)
+            {
+                StopCoroutine(_handleUserConfirmPanelsCo);
             }
         }
     }

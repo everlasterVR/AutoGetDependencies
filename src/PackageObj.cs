@@ -10,11 +10,19 @@ namespace everlaster
         public readonly string versionStr;
         public readonly bool requireLatest;
         public string error { get; private set; }
+
         public int version = -1;
-        public bool exists;
+        public bool exists { get; private set; }
         public readonly int depth;
         public HubResourcePackageUI packageUI;
         public HubResourcePackage connectedItem;
+
+        public HubResourcePackage.DownloadStartCallback storeStartCallback;
+        public HubResourcePackage.DownloadCompleteCallback storeCompleteCallback;
+        public HubResourcePackage.DownloadErrorCallback storeErrorCallback;
+        public bool downloadStarted;
+        public bool downloadComplete;
+        public string downloadError;
 
         public PackageObj(string name, string[] parts, int depth)
         {
@@ -31,7 +39,7 @@ namespace everlaster
             exists = FileManagerSecure.PackageExists(name);
         }
 
-        public bool CheckExists() => exists = FileManagerSecure.PackageExists(name);
+        public void CheckExists() => exists = FileManagerSecure.PackageExists(name);
 
         public override string ToString() =>
             $"\n name={name}\n groupName={groupName}\n versionStr={versionStr}" +
@@ -55,6 +63,21 @@ namespace everlaster
                     error = "Failed to determine latest version";
                 }
             }
+        }
+
+        public void CleanupCallbacks()
+        {
+            if(connectedItem == null)
+            {
+                return;
+            }
+
+            if(storeCompleteCallback != null)
+                connectedItem.downloadStartCallback -= storeStartCallback;
+            if(storeCompleteCallback != null)
+                connectedItem.downloadCompleteCallback -= storeCompleteCallback;
+            if(storeErrorCallback != null)
+                connectedItem.downloadErrorCallback -= storeErrorCallback;
         }
     }
 }
