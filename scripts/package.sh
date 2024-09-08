@@ -2,6 +2,7 @@
 
 set -eE -o functrace
 
+./scripts/generate_cslist.sh true
 plugin_name="AutoGetDependencies"
 work_dir="publish"
 
