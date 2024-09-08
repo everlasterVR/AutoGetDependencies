@@ -50,6 +50,10 @@ namespace everlaster
             if(requireLatest)
             {
                 version = latestVersion;
+                if(version == -1)
+                {
+                    error = "Failed to determine latest version";
+                }
             }
         }
     }

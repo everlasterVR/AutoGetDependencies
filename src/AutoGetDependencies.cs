@@ -18,6 +18,10 @@ namespace everlaster
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
         readonly List<PackageObj> _packages = new List<PackageObj>();
+        readonly List<HubResourcePackageUI> _packageUIs = new List<HubResourcePackageUI>();
+        readonly List<PackageObj> _missingPackages = new List<PackageObj>();
+        readonly List<PackageObj> _pendingPackages = new List<PackageObj>();
+        readonly List<PackageObj> _notOnHubPackages = new List<PackageObj>();
         bool _initialized;
         Coroutine _downloadCo;
         bool _hadError;
@@ -222,8 +226,7 @@ namespace everlaster
                         continue;
                     }
 
-                    var package = _packages.FirstOrDefault(obj => obj.name == trimmed);
-                    if(package == null)
+                    if(!_packages.Exists(obj => obj.name == trimmed))
                     {
                         _packages.Add(new PackageObj(trimmed, parts, depth));
                     }
@@ -347,6 +350,11 @@ namespace everlaster
         IEnumerator DownloadMissingViaHubCo()
         {
 #region SetupVariables
+            _packageUIs.Clear();
+            _missingPackages.Clear();
+            _pendingPackages.Clear();
+            _notOnHubPackages.Clear();
+
             bool hubWasTempEnabled = false;
             Transform hubBrowsePanelT;
             Transform missingPackagesPanelT;
@@ -517,9 +525,6 @@ namespace everlaster
              *
              */
 
-            var packageUIs = new List<HubResourcePackageUI>();
-            var missingPackages = new List<PackageObj>();
-
             // populate lists
             {
                 foreach(Transform packageDownloadPanel in contentT)
@@ -531,26 +536,26 @@ namespace everlaster
                         continue;
                     }
 
-                    packageUIs.Add(packageUI);
+                    _packageUIs.Add(packageUI);
                 }
 
-                missingPackages.AddRange(_packages.Where(obj => !obj.exists).ToList());
-                if(_alwaysCheckForUpdatesBool.val || missingPackages.Count > 0)
+                _missingPackages.AddRange(_packages.Where(obj => !obj.exists));
+                if(_alwaysCheckForUpdatesBool.val || _missingPackages.Count > 0)
                 {
-                    missingPackages.AddRange(_packages.Where(obj => obj.requireLatest));
+                    _missingPackages.AddRange(_packages.Where(obj => !_missingPackages.Contains(obj) && obj.requireLatest));
                 }
             }
 
             // match missing packages to correct hub resources
             try
             {
-                foreach(var obj in missingPackages)
+                foreach(var obj in _missingPackages)
                 {
                     int latestVersion = -1;
                     HubResourcePackageUI matchedUI = null;
                     HubResourcePackage matchedItem = null;
 
-                    foreach(var ui in packageUIs)
+                    foreach(var ui in _packageUIs)
                     {
                         var connectedItem = ui.connectedItem;
                         if(connectedItem == null)
@@ -590,43 +595,42 @@ namespace everlaster
             }
             catch(Exception e)
             {
+                Debug.Log($"Exception during matching: {e}");
                 OnException(e);
                 // TODO break or teardown?
             }
 
-            // TODO remove
-            foreach(var obj in missingPackages)
-            {
-                Debug.Log(obj.ToString());
-                Debug.Log(DevUtils.ObjectPropertiesString(obj.connectedItem));
-            }
+            // foreach(var obj in _missingPackages)
+            // {
+            //     Debug.Log(obj.ToString());
+            //     Debug.Log(DevUtils.ObjectPropertiesString(obj.connectedItem));
+            // }
 
             // download missing packages
-            var notOnHubPackages = new List<PackageObj>();
-            var pendingPackages = new List<PackageObj>();
-            foreach(var obj in missingPackages)
+            foreach(var obj in _missingPackages)
             {
                 if(obj.error != null)
                 {
-                    if(_logErrorsBool.val) _logBuilder.Error($"Invalid dependency {obj.name}: {obj.error}");
+                    if(_logErrorsBool.val) _logBuilder.Error($"Error in dependency {obj.name}: {obj.error}");
+                    _hadError = true;
                     continue;
                 }
 
-                // TODO
-                // if(obj.version != -1)
-                // {
-                //     if(!obj.connectedItem.CanBeDownloaded && obj.connectedItem.NeedsDownload)
-                //     {
-                //         pendingPackages.Add(obj);
-                //     }
-                // }
-                // else
-                // {
-                //
-                // }
+                if(!obj.connectedItem.NeedsDownload)
+                {
+                    obj.CheckExists();
+                }
+                else if(obj.connectedItem.CanBeDownloaded)
+                {
+                    _pendingPackages.Add(obj);
+                }
+                else
+                {
+                    _notOnHubPackages.Add(obj);
+                }
             }
 
-            foreach(var obj in pendingPackages)
+            foreach(var obj in _pendingPackages)
             {
                 if(obj.packageUI.downloadButton != null)
                 {
@@ -639,15 +643,20 @@ namespace everlaster
                 // obj.downloadButton.onClick.Invoke();
             }
 
+            foreach(var obj in _notOnHubPackages)
+            {
+                Debug.Log($"Not on Hub: {obj.name}");
+            }
+
             // TODO replace timeout with progress bar
             {
                 float timeout = Time.time + _timeoutFloat.val;
-                while(pendingPackages.Any(obj => !obj.CheckExists()) && Time.time < timeout) // could take long
+                while(_pendingPackages.Any(obj => !obj.CheckExists()) && Time.time < timeout) // could take long
                 {
                     yield return null;
                 }
 
-                if(pendingPackages.Any(obj => !obj.exists))
+                if(_pendingPackages.Any(obj => !obj.exists))
                 {
                     if(_logErrorsBool.val) _logBuilder.Error("Timed out before downloads finished.");
                     // error = true;
