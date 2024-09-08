@@ -410,6 +410,16 @@ namespace everlaster
 
             _hubBrowse.CallAction("OpenMissingPackagesPanel");
 
+            // hide panel
+            Vector3 originalPos;
+            {
+                missingPackagesPanelT.SetParent(transform);
+                _hubBrowse.Hide();
+                SuperController.singleton.DeactivateWorldUI();
+                originalPos = missingPackagesPanelT.transform.position;
+                missingPackagesPanelT.transform.position = new Vector3(originalPos.x, originalPos.y - 1000, originalPos.z);
+            }
+
             // wait for VAM to destroy package download panels from a previous scan
             {
                 float timeout = Time.time + 5;
@@ -436,22 +446,6 @@ namespace everlaster
                 if(Time.time >= timeout)
                 {
                     OnError("Timeout: No package download panels found");
-                    yield break;
-                }
-            }
-
-            // wait for HubBrowsePanel to be active; probably unnecessary
-            {
-                float timeout = Time.time + 10;
-                while(!hubBrowsePanelT.gameObject.activeInHierarchy && Time.time < timeout)
-                {
-                    yield return null;
-                    hubBrowsePanelT = _hubBrowse.UITransform;
-                }
-
-                if(Time.time >= timeout)
-                {
-                    OnError("Timeout: HubBrowsePanel not active");
                     yield break;
                 }
             }
@@ -498,17 +492,6 @@ namespace everlaster
                 {
                     yield return null; // could take long
                 }
-            }
-
-            Vector3 originalPos;
-
-            // hide panel
-            {
-                missingPackagesPanelT.SetParent(transform);
-                _hubBrowse.Hide();
-                SuperController.singleton.DeactivateWorldUI();
-                originalPos = missingPackagesPanelT.transform.position;
-                missingPackagesPanelT.transform.position = new Vector3(originalPos.x, originalPos.y - 1000, originalPos.z);
             }
 #endregion OpenMissingPackagesPanel
 
