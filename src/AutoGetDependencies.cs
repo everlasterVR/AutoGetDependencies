@@ -321,7 +321,7 @@ namespace everlaster
                 obj => obj.exists
             );
 
-            _infoString.val = sb.ToString();
+            SetJssText(_infoString, sb);
         }
 
         static void AppendPackagesInfo(StringBuilder sb, string title, Color titleColor, List<PackageObj> packages, Func<PackageObj, bool> condition)
@@ -380,16 +380,20 @@ namespace everlaster
                 obj => true
             );
 
-            if(sb.Length > 16000)
-            {
-                const string truncated = "\n\n(too long, truncated)";
-                sb.Length = 16000 - truncated.Length;
-                sb.Append(truncated);
-            }
+            SetJssText(_infoString, sb);
+        }
 
+        void SetJssText(JSONStorableString jss, StringBuilder sb)
+        {
             try
             {
-                _infoString.val = sb.ToString();
+                if(sb.Length > 16000)
+                {
+                    const string truncated = "\n\n(too long, truncated)";
+                    sb.Length = 16000 - truncated.Length;
+                    sb.Append(truncated);
+                }
+                jss.val = sb.ToString();
             }
             catch(Exception e)
             {
