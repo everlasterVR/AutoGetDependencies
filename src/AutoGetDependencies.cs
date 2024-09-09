@@ -17,18 +17,23 @@ namespace everlaster
         LogBuilder _logBuilder;
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
+        readonly string _errorColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0, 0));
+        readonly string _updateNeededColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0.4f, 0f));
+        readonly string _okColor = ColorUtility.ToHtmlStringRGBA(new Color(0, 0.50f, 0));
+        readonly string _subDependencyColor = ColorUtility.ToHtmlStringRGBA(new Color(0.4f, 0.4f, 0.4f));
         readonly List<PackageObj> _packages = new List<PackageObj>();
-        readonly List<HubResourcePackageUI> _packageUIs = new List<HubResourcePackageUI>();
+        readonly List<PackageObj> _versionErrorPackages = new List<PackageObj>();
         readonly List<PackageObj> _missingPackages = new List<PackageObj>();
-        readonly List<PackageObj> _pendingPackages = new List<PackageObj>();
+        readonly List<PackageObj> _updateNeededPackages = new List<PackageObj>();
+        readonly List<PackageObj> _installedPackages = new List<PackageObj>();
+        readonly List<HubResourcePackageUI> _packageUIs = new List<HubResourcePackageUI>();
         readonly List<PackageObj> _notOnHubPackages = new List<PackageObj>();
         bool _initialized;
-        bool _anyMissing;
-        bool _anyUpdateNeeded;
         Coroutine _downloadCo;
         Coroutine _handleUserConfirmPanelsCo;
+        bool _pending;
         bool _finished;
-        string _error;
+        readonly StringBuilder _downloadErrorsSb = new StringBuilder();
         float _progress;
 
         JSONStorableBool _searchSubDependenciesBool;
@@ -41,6 +46,8 @@ namespace everlaster
         JSONStorableFloat _progressFloat; // TODO select UISlider from scene to act as progress bar (copy UISliderSync)
         JSONStorableBool _logErrorsBool;
         // TODO action to trigger teardown in case of infinite yield return null
+        // TODO action to copy errors to clipboard
+        // TODO action to navigate to plugin UI
 
         public override void InitUI()
         {
@@ -68,7 +75,7 @@ namespace everlaster
                 _uiCreated = true;
             }
 
-            if(_anyMissing || _anyUpdateNeeded)
+            if(_pending)
             {
                 UpdatePendingInfo();
             }
@@ -225,31 +232,74 @@ namespace everlaster
                 StopCoroutine(_downloadCo);
             }
 
+            _pending = false;
             _finished = false;
-            _error = null;
+            _downloadErrorsSb.Clear();
             _progress = 0;
             _progressFloat.val = 0;
             SuperController.singleton.RescanPackages();
-            _packages.Clear();
-            FindDependencies(_metaJson, _searchSubDependenciesBool.val);
 
             // TODO find any disabled dependencies and call trigger
+            _packages.Clear();
+            _versionErrorPackages.Clear();
+            _missingPackages.Clear();
+            _updateNeededPackages.Clear();
+            _installedPackages.Clear();
+            FindDependencies(_metaJson, _searchSubDependenciesBool.val);
 
-            _anyMissing = _packages.Exists(PackageIsMissing);
-            _anyUpdateNeeded = _packages.Exists(PackageNeedsUpdate);
-
-            if(_anyMissing || _anyUpdateNeeded)
+            // populate lists
             {
-                Debug.Log("TODO trigger on dependencies found & pending download");
-                // TODO trigger on dependencies found & pending download
+                foreach(var obj in _packages)
+                {
+                    if(obj.versionError != null) _versionErrorPackages.Add(obj);
+                    else if(!obj.exists) _missingPackages.Add(obj);
+                    else _installedPackages.Add(obj);
+                }
+
+                if(_alwaysCheckForUpdatesBool.val || _missingPackages.Count > 0)
+                {
+                    for(int i = _installedPackages.Count - 1; i >= 0; i--)
+                    {
+                        var obj = _installedPackages[i];
+                        if(obj.requireLatest)
+                        {
+                            _updateNeededPackages.Add(obj);
+                            _installedPackages.RemoveAt(i);
+                        }
+                    }
+                }
+
+                _updateNeededPackages.Reverse();
+            }
+
+            if(_missingPackages.Count > 0 || _updateNeededPackages.Count > 0)
+            {
+                if(_versionErrorPackages.Count > 0)
+                {
+                    Debug.Log("TODO trigger on failure"); // TODO
+                }
+                else
+                {
+                    Debug.Log("TODO trigger on dependencies found & pending download"); // TODO
+                }
+
+                _pending = true;
                 UpdatePendingInfo();
             }
             else
             {
-                _progress = 1;
-                _progressFloat.val = 100;
-                Debug.Log("TODO trigger on success");
-                // TODO trigger on success
+                if(_versionErrorPackages.Count > 0)
+                {
+                    Debug.Log("TODO trigger on failure"); // TODO
+                }
+                else
+                {
+                    _progress = 1;
+                    _progressFloat.val = 100;
+                    Debug.Log("TODO trigger on success"); // TODO
+                }
+
+                _finished = true;
                 UpdateFinishedInfo();
             }
         }
@@ -275,7 +325,7 @@ namespace everlaster
 
                     if(!_packages.Exists(obj => obj.name == trimmed))
                     {
-                        _packages.Add(new PackageObj(trimmed, parts, depth));
+                        _packages.Add(new PackageObj(trimmed, parts, depth > 0));
                     }
 
                     if(recursive)
@@ -290,13 +340,6 @@ namespace everlaster
             }
         }
 
-        // ReSharper disable MemberCanBeMadeStatic.Local
-        bool PackageHasError(PackageObj obj) => obj.error != null;
-        bool PackageIsMissing(PackageObj obj) => obj.error == null && !obj.exists;
-        bool PackageExists(PackageObj obj) => obj.error == null && obj.exists;
-        bool PackageNeedsUpdate(PackageObj obj) => (_alwaysCheckForUpdatesBool.val || _anyMissing) && obj.error == null && obj.exists && obj.requireLatest;
-        // ReSharper restore MemberCanBeMadeStatic.Local
-
         void UpdatePendingInfo()
         {
             if(!_uiCreated)
@@ -307,36 +350,39 @@ namespace everlaster
             _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
             var sb = new StringBuilder();
 
-            AppendPackagesInfo(sb, "Version error", new Color(0.75f, 0, 0), _packages, PackageHasError);
-            AppendPackagesInfo(sb, "Missing, download needed", new Color(0.75f, 0, 0), _packages, PackageIsMissing);
-            AppendPackagesInfo(sb, "Found, check for update needed", new Color(0, 0, 0.50f), _packages, PackageNeedsUpdate);
-            AppendPackagesInfo(sb, "Found", new Color(0, 0.50f, 0), _packages, PackageExists);
+            if(_versionErrorPackages.Count > 0)
+            {
+                AppendPackagesInfo(sb, "Version error in meta.json", _errorColor, _versionErrorPackages);
+            }
+
+            AppendPackagesInfo(sb, "Missing, download needed", _errorColor, _missingPackages);
+            AppendPackagesInfo(sb, "Installed, check for update needed", _updateNeededColor, _updateNeededPackages);
+            AppendPackagesInfo(sb, "Installed", _okColor, _installedPackages);
 
             SetJssText(_infoString, sb);
         }
 
-        static void AppendPackagesInfo(StringBuilder sb, string title, Color titleColor, List<PackageObj> packages, Func<PackageObj, bool> condition)
+        void AppendPackagesInfo(StringBuilder sb, string title, string titleColor, List<PackageObj> packages)
         {
-            sb.AppendFormat("<size=28><color=#{0}><b>{1}:</b></color></size>\n\n", ColorUtility.ToHtmlStringRGBA(titleColor), title);
-            int count = 0;
-            string optionalColor = ColorUtility.ToHtmlStringRGBA(new Color(0.4f, 0.4f, 0.4f));
+            sb.AppendFormat("<size=28><color=#{0}><b>{1}:</b></color></size>\n\n", titleColor, title);
+            if(packages.Count == 0)
+            {
+                sb.Append("None.\n\n");
+                return;
+            }
+
             foreach (var obj in packages)
             {
-                if (condition(obj))
+                if(obj.isSubDependency)
                 {
-                    if(obj.depth > 0)
-                    {
-                        string indent = new string('\u00A0', obj.depth * 3);
-                        sb.AppendFormat("{0}<color=#{1}>-\u00A0{2}</color>\n", indent, optionalColor, obj.name);
-                    }
-                    else
-                    {
-                        sb.AppendFormat("-\u00A0{0}\n", obj.name);
-                    }
-                    count++;
+                    string indent = new string('\u00A0', 3);
+                    sb.AppendFormat("{0}<color=#{1}>-\u00A0{2}</color>\n", indent, _subDependencyColor, obj.name);
+                }
+                else
+                {
+                    sb.AppendFormat("-\u00A0{0}\n", obj.name);
                 }
             }
-            if (count == 0) sb.Append("None.\n");
             sb.Append("\n");
         }
 
@@ -350,20 +396,29 @@ namespace everlaster
             _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Wrap;
             var sb = new StringBuilder();
 
-            sb.Append(
-                _packages.TrueForAll(obj => obj.exists)
-                    ? "All dependencies are successfully installed.\n"
-                    : "Some dependencies are still missing.\n"
-            );
-
-            if(_error != null)
+            if(_packages.TrueForAll(obj => obj.existsAndIsValid))
             {
-                sb.Append("\nErrors:\n");
-                sb.Append(_error);
-                sb.Append("\n\n");
+                sb.Append("All dependencies are installed!\n\n");
+            }
+            else
+            {
+                if(_versionErrorPackages.Count > 0)
+                {
+                    AppendPackagesInfo(sb, "Version error in meta.json", _errorColor, _versionErrorPackages);
+                }
+                if(_notOnHubPackages.Count > 0)
+                {
+                    AppendPackagesInfo(sb, "Packages not on Hub", _errorColor, _notOnHubPackages);
+                }
+                if(_downloadErrorsSb != null)
+                {
+                    sb.AppendFormat("<size=28><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
+                    sb.Append(_downloadErrorsSb);
+                    sb.Append("\n\n");
+                }
+                AppendPackagesInfo(sb, "Installed", _okColor, _packages.Where(obj => obj.existsAndIsValid).ToList());
             }
 
-            AppendPackagesInfo(sb, "Not on Hub", new Color(0.75f, 0, 0), _notOnHubPackages, obj => true);
             SetJssText(_infoString, sb);
         }
 
@@ -387,31 +442,30 @@ namespace everlaster
 
         void DownloadMissingCallback()
         {
-            if(!_anyMissing && !_anyUpdateNeeded)
+            if(!_pending)
             {
-                // TODO .. ?
-                _infoString.val = "All dependencies are already installed.";
-                if(_logErrorsBool.val) _logBuilder.Error("Must find dependencies first.");
+                if(_logErrorsBool.val) _logBuilder.Error("Download is not pending");
                 return;
             }
 
+            _pending = false;
             _downloadCo = StartCoroutine(DownloadMissingViaHubCo());
         }
 
         void OnError(string message, bool teardown = true)
         {
             if (_logErrorsBool.val) _logBuilder.Error(message);
-            _error = $"\n{message}";
+            _downloadErrorsSb.AppendLine(message);
             if(teardown)
             {
                 Teardown();
             }
         }
 
-        void OnException(Exception e, bool teardown = true)
+        void OnException(string message, Exception e, bool teardown = true)
         {
-            if (_logErrorsBool.val) _logBuilder.Exception(e);
-            _error += $"\n{e.Message}";
+            if (_logErrorsBool.val) _logBuilder.Exception(message, e);
+            _downloadErrorsSb.AppendFormat("{0}: {1}\n", message, e.Message);
             if(teardown)
             {
                 Teardown();
@@ -429,11 +483,9 @@ namespace everlaster
         {
 #region SetupVariables
             _packageUIs.Clear();
-            _missingPackages.Clear();
-            _pendingPackages.Clear();
             _notOnHubPackages.Clear();
             _panelRelocated = false;
-            _error = null;
+            _downloadErrorsSb.Clear();
 
             try
             {
@@ -577,7 +629,7 @@ namespace everlaster
              */
 
 #region PreDownload
-            // populate lists
+            // Find package UIs
             try
             {
                 foreach(Transform packageDownloadPanel in _contentT)
@@ -591,23 +643,18 @@ namespace everlaster
 
                     _packageUIs.Add(packageUI);
                 }
-
-                _missingPackages.AddRange(_packages.Where(obj => !obj.exists));
-                if(_alwaysCheckForUpdatesBool.val || _missingPackages.Count > 0)
-                {
-                    _missingPackages.AddRange(_packages.Where(obj => !_missingPackages.Contains(obj) && obj.requireLatest));
-                }
             }
             catch(Exception e)
             {
-                OnException(e);
+                OnException("Find package UIs", e);
                 yield break;
             }
 
-            // match missing packages to correct hub resources
+            // Match missing packages to correct hub pacakge UIs
+            var packagesToDownload = _missingPackages.Concat(_updateNeededPackages).ToList();
             try
             {
-                foreach(var obj in _missingPackages)
+                foreach(var obj in packagesToDownload)
                 {
                     int latestVersion = -1;
                     HubResourcePackageUI matchedUI = null;
@@ -653,24 +700,23 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                OnException(e);
+                OnException("Match to package UI", e);
                 yield break;
             }
 
-            // split into groups
+            var pendingPackages = new List<PackageObj>();
+
+            // detect errors from RegisterHubItem, split into pending and not on Hub packages
             try
             {
-                foreach(var obj in _missingPackages)
+                foreach(var obj in packagesToDownload)
                 {
-                    // Debug.Log(obj.ToString());
-                    // Debug.Log(DevUtils.ObjectPropertiesString(obj.connectedItem));
-
-                    if(obj.error != null)
+                    if(obj.hubItemError != null)
                     {
-                        string error = $"'{obj.name}' error: {obj.error}";
+                        string error = $"'{obj.name}' error: {obj.hubItemError}";
                         if(_logErrorsBool.val) _logBuilder.Error(error);
-                        _error += $"\n{error}";
-                        if(!obj.connectedItem.CanBeDownloaded)
+                        _downloadErrorsSb.AppendLine(error);
+                        if(obj.connectedItem != null && !obj.connectedItem.CanBeDownloaded)
                         {
                             _notOnHubPackages.Add(obj);
                         }
@@ -686,7 +732,7 @@ namespace everlaster
 
                     if(obj.connectedItem.CanBeDownloaded)
                     {
-                        _pendingPackages.Add(obj);
+                        pendingPackages.Add(obj);
                     }
                     else
                     {
@@ -696,14 +742,14 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                OnException(e);
+                OnException("Process packages to download", e);
                 yield break;
             }
 
 #endregion PreDownload
 
 #region Download
-            int count = _pendingPackages.Count;
+            int count = pendingPackages.Count;
             if(count <= 0)
             {
                 OnError("No packages can be downloaded.");
@@ -713,7 +759,7 @@ namespace everlaster
             // setup callbacks and start downloads
             try
             {
-                foreach(var obj in _pendingPackages)
+                foreach(var obj in pendingPackages)
                 {
                     MVR.Hub.HubResourcePackage.DownloadStartCallback startCallback = _ => obj.downloadStarted = true;
                     MVR.Hub.HubResourcePackage.DownloadCompleteCallback completeCallback = (_, __) => obj.downloadComplete = true;
@@ -729,7 +775,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                OnException(e);
+                OnException("Start downloads", e);
                 yield break;
             }
 
@@ -741,9 +787,9 @@ namespace everlaster
                 {
                     float sum = 0;
                     bool allDone = true;
-                    for(int i = _pendingPackages.Count - 1; i >= 0; i--)
+                    for(int i = pendingPackages.Count - 1; i >= 0; i--)
                     {
-                        var obj = _pendingPackages[i];
+                        var obj = pendingPackages[i];
                         if(obj.downloadComplete)
                         {
                             sum += 1;
@@ -753,8 +799,8 @@ namespace everlaster
                         if(obj.downloadError != null)
                         {
                             if(_logErrorsBool.val) _logBuilder.Error($"'{obj.name}' error: {obj.downloadError}");
-                            _error += $"\n'{obj.name}' error: {obj.downloadError}";
-                            _pendingPackages.RemoveAt(i);
+                            _downloadErrorsSb.AppendFormat("'{0}' error: {1}\n", obj.name, obj.downloadError);
+                            pendingPackages.RemoveAt(i);
                             continue;
                         }
 
@@ -776,7 +822,7 @@ namespace everlaster
                 }
                 catch(Exception e)
                 {
-                    OnException(e, false);
+                    OnException("Downloading", e, false);
                     break;
                 }
 
@@ -785,7 +831,7 @@ namespace everlaster
 #endregion Download
 
             _handleUserConfirmPanelsCo = StartCoroutine(WaitForUserConfirmPanels());
-            if(_error == null)
+            if(_downloadErrorsSb == null)
             {
                 yield return _handleUserConfirmPanelsCo;
             }
@@ -868,35 +914,39 @@ namespace everlaster
 
         void Teardown()
         {
-            if(_panelRelocated && _missingPackagesPanelT != null && _missingPackagesPanelT.gameObject != null && _hubBrowsePanelT != null)
+            // cleanup
             {
-                _missingPackagesPanelT.position = _originalPanelPos;
-                _missingPackagesPanelT.SetParent(_hubBrowsePanelT);
-                _missingPackagesPanelT.gameObject.SetActive(false);
-                _panelRelocated = false;
-            }
+                if(_panelRelocated && _missingPackagesPanelT != null && _missingPackagesPanelT.gameObject != null && _hubBrowsePanelT != null)
+                {
+                    _missingPackagesPanelT.position = _originalPanelPos;
+                    _missingPackagesPanelT.SetParent(_hubBrowsePanelT);
+                    _missingPackagesPanelT.gameObject.SetActive(false);
+                    _panelRelocated = false;
+                }
 
-            foreach(var obj in _missingPackages)
-            {
-                obj.CleanupCallbacks();
-            }
+                foreach(var obj in _missingPackages)
+                {
+                    obj.CleanupCallbacks();
+                }
 
-            if(_hubWasTempEnabled)
-            {
-                _hubBrowse.HubEnabled = false;
-                _hubWasTempEnabled = false;
+                if(_hubWasTempEnabled)
+                {
+                    _hubBrowse.HubEnabled = false;
+                    _hubWasTempEnabled = false;
+                }
             }
 
             foreach(var obj in _packages)
             {
-                obj.CheckExists();
+                obj.SyncExists();
             }
 
-            // suppress error triggers and not on Hub packages triggers if all packages happen to somehow exist regardless
-            if(_packages.TrueForAll(obj => obj.exists))
+            // success path; suppresses error triggers and not on Hub packages triggers if all packages happen to somehow exist regardless
+            if(_packages.TrueForAll(obj => obj.existsAndIsValid))
             {
                 // TODO trigger on success
             }
+            // failure path
             else
             {
                 if(_notOnHubPackages.Count > 0)
@@ -906,10 +956,7 @@ namespace everlaster
                     // TODO provide a triggerable action for copying the not on Hub package names to clipboard
                 }
 
-                if(_error != null)
-                {
-                    // TODO trigger on errors
-                }
+                // TODO trigger on failure
             }
 
             _downloadCo = null;

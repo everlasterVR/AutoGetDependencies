@@ -9,11 +9,13 @@ namespace everlaster
         public readonly string groupName;
         public readonly string versionStr;
         public readonly bool requireLatest;
-        public string error { get; private set; }
+        public string versionError { get; }
+        public string hubItemError { get; private set; }
 
         public int version = -1;
         public bool exists { get; private set; }
-        public readonly int depth;
+        public bool existsAndIsValid => exists && versionError == null;
+        public readonly bool isSubDependency;
         public HubResourcePackageUI packageUI;
         public HubResourcePackage connectedItem;
 
@@ -24,7 +26,7 @@ namespace everlaster
         public bool downloadComplete;
         public string downloadError;
 
-        public PackageObj(string name, string[] parts, int depth)
+        public PackageObj(string name, string[] parts, bool isSubDependency)
         {
             this.name = name;
             groupName = $"{parts[0]}.{parts[1]}";
@@ -32,14 +34,14 @@ namespace everlaster
             requireLatest = versionStr == "latest";
             if(!requireLatest && !int.TryParse(versionStr, out version))
             {
-                error = $"Invalid version: {versionStr}";
+                versionError = $"Invalid version: {versionStr}";
             }
 
-            this.depth = depth;
+            this.isSubDependency = isSubDependency;
             exists = FileManagerSecure.PackageExists(name);
         }
 
-        public void CheckExists() => exists = FileManagerSecure.PackageExists(name);
+        public void SyncExists() => exists = FileManagerSecure.PackageExists(name);
 
         public override string ToString() =>
             $"\n name={name}\n groupName={groupName}\n versionStr={versionStr}" +
@@ -49,7 +51,7 @@ namespace everlaster
         {
             if(packageUI == null || connectedItem == null)
             {
-                error = "Failed to register hub item";
+                hubItemError = "Failed to register hub item";
                 return;
             }
 
@@ -60,7 +62,7 @@ namespace everlaster
                 version = latestVersion;
                 if(version == -1)
                 {
-                    error = "Failed to determine latest version";
+                    hubItemError = "Failed to determine latest version";
                 }
             }
         }
