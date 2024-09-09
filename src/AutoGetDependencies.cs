@@ -45,10 +45,14 @@ namespace everlaster
         JSONStorableAction _downloadAction;
         JSONStorableStringChooser _progressBarChooser;
         JSONStorableBool _logErrorsBool;
+
         JSONStorableFloat _progressFloat;
         JSONStorableAction _forceFinishAction;
-        // TODO action to copy errors to clipboard
+        JSONStorableAction _copyErrorsToClipboardAction;
+        JSONStorableAction _copyNotOnHubToClipboardAction;
+        // JSONStorableAction _copyDisabledToClipboardAction; // TODO
         // TODO action to navigate to plugin UI
+        // TODO special handling for include in VAM packages
 
         Atom _progressBarAtom;
         Slider _progressBarSlider;
@@ -164,6 +168,12 @@ namespace everlaster
                 _forceFinishAction = new JSONStorableAction("Force finish", ForceFinishCallback);
                 RegisterAction(_forceFinishAction);
 
+                _copyErrorsToClipboardAction = new JSONStorableAction("Copy errors to clipboard", CopyErrorsToClipboardCallback);
+                RegisterAction(_copyErrorsToClipboardAction);
+
+                _copyNotOnHubToClipboardAction = new JSONStorableAction("Copy 'Not on Hub' names to clipboard", CopyNotOnHubToClipboardCallback);
+                RegisterAction(_copyNotOnHubToClipboardAction);
+
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
                 SuperController.singleton.onAtomAddedHandlers += OnAtomAdded;
                 SuperController.singleton.onAtomRemovedHandlers += OnAtomRemoved;
@@ -199,9 +209,9 @@ namespace everlaster
             CreateToggle(_searchSubDependenciesBool);
             CreateToggle(_alwaysCheckForUpdatesBool);
             {
-                var button = CreateButton(_findDependenciesAction.name);
-                button.height = 75;
-                _findDependenciesAction.RegisterButton(button);
+                var uiDynamic = CreateButton(_findDependenciesAction.name);
+                uiDynamic.height = 75;
+                _findDependenciesAction.RegisterButton(uiDynamic);
             }
 
             CreateSpacer().height = 10;
@@ -214,13 +224,17 @@ namespace everlaster
             CreateToggle(_tempEnableHubBool);
             CreateToggle(_autoAcceptPackagePluginsBool);
             {
-                var button = CreateButton(_downloadAction.name);
-                button.height = 75;
-                _downloadAction.RegisterButton(button);
+                var uiDynamic = CreateButton(_downloadAction.name);
+                uiDynamic.height = 75;
+                _downloadAction.RegisterButton(uiDynamic);
             }
 
             CreateSpacer().height = 5;
-            CreateScrollablePopup(_progressBarChooser).popup.labelText.color = Color.black;
+            {
+                var uiDynamic = CreateScrollablePopup(_progressBarChooser);
+                uiDynamic.popup.labelText.color = Color.black;
+                uiDynamic.popup.popupPanelHeight = 470;
+            }
             {
                 var uiDynamic = CreateSlider(_progressFloat);
                 uiDynamic.valueFormat = "F0";
@@ -229,11 +243,10 @@ namespace everlaster
             }
 
             CreateSpacer().height = 10;
-            CreateToggle(_logErrorsBool);
             CreateTriggerMenuButton("On download failed...");
 
             CreateSpacer().height = 10;
-
+            CreateToggle(_logErrorsBool);
 
             // TODO plugin usage info
             {
@@ -265,14 +278,14 @@ namespace everlaster
 
         void CreateHeader(string text)
         {
-            var title = CreateTextField(new JSONStorableString(Guid.NewGuid().ToString().Substring(0, 4), text));
-            var layoutElement = title.GetComponent<LayoutElement>();
+            var uiDynamic = CreateTextField(new JSONStorableString(Guid.NewGuid().ToString().Substring(0, 4), text));
+            var layoutElement = uiDynamic.GetComponent<LayoutElement>();
             layoutElement.minHeight = 55;
             layoutElement.preferredHeight = 55;
-            title.UItext.fontSize = 30;
-            title.UItext.fontStyle = FontStyle.Bold;
-            title.backgroundColor = Color.clear;
-            var rectT = title.UItext.GetComponent<RectTransform>();
+            uiDynamic.UItext.fontSize = 30;
+            uiDynamic.UItext.fontStyle = FontStyle.Bold;
+            uiDynamic.backgroundColor = Color.clear;
+            var rectT = uiDynamic.UItext.GetComponent<RectTransform>();
             var pos = rectT.anchoredPosition;
             pos.y = -15;
             rectT.anchoredPosition = pos;
@@ -280,9 +293,9 @@ namespace everlaster
 
         void CreateTriggerMenuButton(string text)
         {
-            var button = CreateButton(text);
-            button.buttonText.alignment = TextAnchor.MiddleLeft;
-            var textRectT = button.buttonText.GetComponent<RectTransform>();
+            var uiDynamic = CreateButton(text);
+            uiDynamic.buttonText.alignment = TextAnchor.MiddleLeft;
+            var textRectT = uiDynamic.buttonText.GetComponent<RectTransform>();
             var pos = textRectT.anchoredPosition;
             pos.x += 15;
             textRectT.anchoredPosition = pos;
@@ -353,7 +366,6 @@ namespace everlaster
             {
                 if(_versionErrorPackages.Count == 0)
                 {
-                    SetProgress(1);
                     Debug.Log("TODO trigger on success"); // TODO
                 }
 
@@ -616,6 +628,39 @@ namespace everlaster
                 StopCoroutine(_downloadCo);
                 Teardown();
             }
+        }
+
+        // TODO test
+        void CopyErrorsToClipboardCallback()
+        {
+            var sb = new StringBuilder();
+            if(_versionErrorPackages.Count > 0)
+            {
+                sb.Append("Version errors in meta.json:\n\n");
+                foreach(var obj in _versionErrorPackages)
+                {
+                    sb.AppendFormat("{0}: {1}\n", obj.name, obj.versionError);
+                }
+                sb.Append("\n");
+            }
+
+            sb.Append(_downloadErrorsSb);
+            GUIUtility.systemCopyBuffer = sb.ToString();
+        }
+
+        // TODO test
+        void CopyNotOnHubToClipboardCallback()
+        {
+            var sb = new StringBuilder();
+            if(_notOnHubPackages.Count > 0)
+            {
+                foreach(var obj in _notOnHubPackages)
+                {
+                    sb.AppendFormat("{0}\n", obj.name);
+                }
+            }
+
+            GUIUtility.systemCopyBuffer = sb.ToString();
         }
 
         void OnError(string message, bool teardown = true)
@@ -1117,7 +1162,6 @@ namespace everlaster
                 {
                     // TODO trigger on not on Hub packages found
                     // TODO send list of not on Hub packages to UIText
-                    // TODO provide a triggerable action for copying the not on Hub package names to clipboard
                 }
 
                 // TODO trigger on failure

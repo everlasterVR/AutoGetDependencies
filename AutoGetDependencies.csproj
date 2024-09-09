@@ -80,6 +80,9 @@
         <Reference Include="UnityEngine.UIModule">
             <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.UIModule.dll</HintPath>
         </Reference>
+        <Reference Include="UnityEngine.IMGUIModule">
+            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+        </Reference>
         <!--        <Reference Include="UnityEngine.VRModule">-->
         <!--            <HintPath>..\..\..\..\VaM_Data\Managed\UnityEngine.VRModule.dll</HintPath>-->
         <!--        </Reference>-->
