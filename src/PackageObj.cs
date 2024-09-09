@@ -7,11 +7,11 @@ namespace everlaster
     {
         public readonly string name;
         public readonly string groupName;
-        public readonly string versionStr;
         public readonly bool requireLatest;
         public string versionError { get; }
         public string hubItemError { get; private set; }
 
+        // ReSharper disable once NotAccessedField.Global
         public int version = -1;
         public bool exists { get; private set; }
         public bool existsAndIsValid => exists && versionError == null;
@@ -30,7 +30,7 @@ namespace everlaster
         {
             this.name = name;
             groupName = $"{parts[0]}.{parts[1]}";
-            versionStr = parts[2];
+            string versionStr = parts[2];
             requireLatest = versionStr == "latest";
             if(!requireLatest && !int.TryParse(versionStr, out version))
             {
@@ -42,10 +42,6 @@ namespace everlaster
         }
 
         public void SyncExists() => exists = FileManagerSecure.PackageExists(name);
-
-        public override string ToString() =>
-            $"\n name={name}\n groupName={groupName}\n versionStr={versionStr}" +
-            $"\n requireLatest={requireLatest}\n version={version}\n exists={exists}";
 
         public void RegisterHubItem(HubResourcePackageUI packageUI, HubResourcePackage connectedItem, int latestVersion)
         {

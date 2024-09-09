@@ -21,6 +21,7 @@ namespace everlaster
         readonly string _updateNeededColor = ColorUtility.ToHtmlStringRGBA(new Color(0.44f, 0.44f, 0f));
         readonly string _okColor = ColorUtility.ToHtmlStringRGBA(new Color(0, 0.50f, 0));
         readonly string _subDependencyColor = ColorUtility.ToHtmlStringRGBA(new Color(0.4f, 0.4f, 0.4f));
+        readonly Color _paleBlue = new Color(0.71f, 0.71f, 1.00f);
         readonly List<PackageObj> _packages = new List<PackageObj>();
         readonly List<PackageObj> _versionErrorPackages = new List<PackageObj>();
         readonly List<PackageObj> _missingPackages = new List<PackageObj>();
@@ -45,18 +46,25 @@ namespace everlaster
         JSONStorableAction _downloadAction;
         JSONStorableStringChooser _progressBarChooser;
         JSONStorableBool _logErrorsBool;
+        JSONStorableStringChooser _notOnHubUITextChooser;
+        // JSONStorableStringChooser _disabledUITextChooser; // TODO
 
         JSONStorableFloat _progressFloat;
         JSONStorableAction _forceFinishAction;
         JSONStorableAction _copyErrorsToClipboardAction;
         JSONStorableAction _copyNotOnHubToClipboardAction;
         // JSONStorableAction _copyDisabledToClipboardAction; // TODO
-        // TODO action to navigate to plugin UI
+        // JSONStorableAction _navigateToPluginUIAction; // TODO
         // TODO special handling for include in VAM packages
+        // TODO check VAM version latest
 
         Atom _progressBarAtom;
         Slider _progressBarSlider;
         readonly List<Atom> _uiSliders = new List<Atom>();
+        Atom _notOnHubAtom;
+        Text _notOnHubText;
+        readonly List<Atom> _uiTexts = new List<Atom>();
+        readonly List<UIPopup> _popups = new List<UIPopup>();
 
         public override void InitUI()
         {
@@ -77,6 +85,8 @@ namespace everlaster
 
             _uiListener = UITransform.gameObject.AddComponent<UnityEventsListener>();
             _uiListener.enabledHandlers += UIEnabled;
+            _uiListener.disabledHandlers += () => OnBlurPopup(null);
+            _uiListener.clickHandlers += _ => OnBlurPopup(null);
         }
 
         void UIEnabled()
@@ -155,13 +165,18 @@ namespace everlaster
                 _downloadAction = new JSONStorableAction("Download missing dependencies", DownloadMissingCallback);
                 RegisterAction(_downloadAction);
 
-                _progressBarChooser = new JSONStorableStringChooser("Progress Bar", new List<string>(), "None", "Progress Bar");
+                _progressBarChooser = new JSONStorableStringChooser("Progress Bar", new List<string>(), "", "Progress Bar");
                 _progressBarChooser.setCallbackFunction = SelectProgressBarCallback;
                 _progressBarChooser.representsAtomUid = true;
                 RegisterStringChooser(_progressBarChooser);
 
                 _logErrorsBool = new JSONStorableBool("Log errors", false);
                 RegisterBool(_logErrorsBool);
+
+                _notOnHubUITextChooser = new JSONStorableStringChooser("'Not on Hub' UIText", new List<string>(), "", "Not\u00A0on\u00A0Hub UIText");
+                _notOnHubUITextChooser.setCallbackFunction = SelectNotOnHubUITextCallback;
+                _notOnHubUITextChooser.representsAtomUid = true;
+                RegisterStringChooser(_notOnHubUITextChooser);
 
                 _progressFloat = new JSONStorableFloat("Download progress (%)", 0, 0, 100);
 
@@ -175,10 +190,12 @@ namespace everlaster
                 RegisterAction(_copyNotOnHubToClipboardAction);
 
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
+                _uiTexts.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UIText"));
                 SuperController.singleton.onAtomAddedHandlers += OnAtomAdded;
                 SuperController.singleton.onAtomRemovedHandlers += OnAtomRemoved;
                 SuperController.singleton.onAtomUIDRenameHandlers += OnAtomRenamed;
                 RebuildUISliderOptions();
+                RebuildUITextOptions();
 
                 _initialized = true;
             }
@@ -230,11 +247,7 @@ namespace everlaster
             }
 
             CreateSpacer().height = 5;
-            {
-                var uiDynamic = CreateScrollablePopup(_progressBarChooser);
-                uiDynamic.popup.labelText.color = Color.black;
-                uiDynamic.popup.popupPanelHeight = 470;
-            }
+            ConfigurePopup(CreateScrollablePopup(_progressBarChooser), 470);
             {
                 var uiDynamic = CreateSlider(_progressFloat);
                 uiDynamic.valueFormat = "F0";
@@ -247,6 +260,7 @@ namespace everlaster
 
             CreateSpacer().height = 10;
             CreateToggle(_logErrorsBool);
+            ConfigurePopup(CreateScrollablePopup(_notOnHubUITextChooser), 470, 0, true);
 
             // TODO plugin usage info
             {
@@ -299,6 +313,36 @@ namespace everlaster
             var pos = textRectT.anchoredPosition;
             pos.x += 15;
             textRectT.anchoredPosition = pos;
+        }
+
+        void ConfigurePopup(UIDynamicPopup uiDynamic, float height, float offsetX = 0, bool upwards = false)
+        {
+            var popup = uiDynamic.popup;
+            popup.labelText.color = Color.black;
+            popup.selectColor = _paleBlue;
+
+            if(height > 0f)
+            {
+                uiDynamic.popupPanelHeight = height;
+            }
+
+            float offsetY = upwards ? height + 60 : 0;
+            popup.popupPanel.offsetMin += new Vector2(offsetX, offsetY);
+            popup.popupPanel.offsetMax += new Vector2(offsetX, offsetY);
+            popup.onOpenPopupHandlers += () => OnBlurPopup(uiDynamic.popup);
+            _popups.Add(popup);
+        }
+
+        void OnBlurPopup(UIPopup openedPopup)
+        {
+            for(int i = 0; i < _popups.Count; i++)
+            {
+                var popup = _popups[i];
+                if(popup != openedPopup)
+                {
+                    popup.visible = false;
+                }
+            }
         }
 
         void FindDependenciesCallback()
@@ -538,9 +582,13 @@ namespace everlaster
             if(atom.type == "UISlider" && !_uiSliders.Contains(atom))
             {
                 _uiSliders.Add(atom);
+                RebuildUISliderOptions();
             }
-
-            RebuildUISliderOptions();
+            else if(atom.type == "UIText" && !_uiTexts.Contains(atom))
+            {
+                _uiTexts.Add(atom);
+                RebuildUITextOptions();
+            }
         }
 
         void OnAtomRemoved(Atom atom)
@@ -548,32 +596,55 @@ namespace everlaster
             if(_uiSliders.Contains(atom))
             {
                 _uiSliders.Remove(atom);
+                RebuildUISliderOptions();
+                if(_progressBarAtom == atom)
+                {
+                    _progressBarChooser.val = "";
+                }
             }
-
-            RebuildUISliderOptions();
-            if(_progressBarAtom == atom)
+            else if(_uiTexts.Contains(atom))
             {
-                _progressBarChooser.val = string.Empty;
+                _uiTexts.Remove(atom);
+                RebuildUITextOptions();
+                if(_notOnHubAtom == atom)
+                {
+                    _notOnHubUITextChooser.val = "";
+                }
             }
         }
 
         void OnAtomRenamed(string oldUid, string newUid)
         {
             RebuildUISliderOptions();
+            RebuildUITextOptions();
             if(_progressBarChooser.val == oldUid)
             {
                 _progressBarChooser.valNoCallback = newUid;
+            }
+            if(_notOnHubUITextChooser.val == oldUid)
+            {
+                _notOnHubUITextChooser.valNoCallback = newUid;
             }
         }
 
         void RebuildUISliderOptions()
         {
-            var options = new List<string> { string.Empty };
+            var options = new List<string> { "" };
             var displayOptions = new List<string> { "None" };
             options.AddRange(_uiSliders.Select(atom => atom.uid));
             displayOptions.AddRange(_uiSliders.Select(atom => atom.uid));
             _progressBarChooser.choices = options;
             _progressBarChooser.displayChoices = displayOptions;
+        }
+
+        void RebuildUITextOptions()
+        {
+            var options = new List<string> { "" };
+            var displayOptions = new List<string> { "None" };
+            options.AddRange(_uiTexts.Select(atom => atom.uid));
+            displayOptions.AddRange(_uiTexts.Select(atom => atom.uid));
+            _notOnHubUITextChooser.choices = options;
+            _notOnHubUITextChooser.displayChoices = displayOptions;
         }
 
         Color _tmpDisabledColor;
@@ -592,9 +663,9 @@ namespace everlaster
                     _progressBarSlider = null;
                 }
 
-                if(option != string.Empty)
+                if(option != "")
                 {
-                    string prevOption = _progressBarAtom != null ? _progressBarAtom.uid : string.Empty;
+                    string prevOption = _progressBarAtom != null ? _progressBarAtom.uid : "";
                     var uiSlider = _uiSliders.Find(atom => atom.uid == option);
                     if(uiSlider == null)
                     {
@@ -612,6 +683,35 @@ namespace everlaster
                     colors.disabledColor = colors.normalColor;
                     _progressBarSlider.colors = colors;
                     _progressBarAtom = uiSlider;
+                }
+            }
+            catch(Exception e)
+            {
+                _logBuilder.Exception(e);
+            }
+        }
+
+        void SelectNotOnHubUITextCallback(string option)
+        {
+            try
+            {
+                _notOnHubAtom = null;
+                _notOnHubText = null;
+
+                if(option != "")
+                {
+                    string prevOption = _notOnHubAtom != null ? _notOnHubAtom.uid : "";
+                    var uiText = _uiTexts.Find(atom => atom.uid == option);
+                    if(uiText == null)
+                    {
+                        _logBuilder.Error($"UIText '{option}' not found");
+                        _notOnHubUITextChooser.valNoCallback = prevOption;
+                        return;
+                    }
+
+                    var holderT = uiText.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder");
+                    _notOnHubText = holderT.Find("Text").GetComponent<Text>();
+                    _notOnHubAtom = uiText;
                 }
             }
             catch(Exception e)
@@ -645,22 +745,19 @@ namespace everlaster
             }
 
             sb.Append(_downloadErrorsSb);
-            GUIUtility.systemCopyBuffer = sb.ToString();
+            if(sb.Length > 0)
+            {
+                GUIUtility.systemCopyBuffer = sb.ToString();
+            }
         }
 
         // TODO test
         void CopyNotOnHubToClipboardCallback()
         {
-            var sb = new StringBuilder();
             if(_notOnHubPackages.Count > 0)
             {
-                foreach(var obj in _notOnHubPackages)
-                {
-                    sb.AppendFormat("{0}\n", obj.name);
-                }
+                GUIUtility.systemCopyBuffer = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
             }
-
-            GUIUtility.systemCopyBuffer = sb.ToString();
         }
 
         void OnError(string message, bool teardown = true)
@@ -1161,7 +1258,10 @@ namespace everlaster
                 if(_notOnHubPackages.Count > 0)
                 {
                     // TODO trigger on not on Hub packages found
-                    // TODO send list of not on Hub packages to UIText
+                    if(_notOnHubText != null)
+                    {
+                        _notOnHubText.text = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
+                    }
                 }
 
                 // TODO trigger on failure
@@ -1188,18 +1288,32 @@ namespace everlaster
         }
 
         /* Ensure loading a SubScene file sets the correct value to JSONStorableStringChooser. */
+        // TODO test just always setting subscenePrefix?
         void FixRestoreFromSubscene(JSONClass jc)
         {
-            if(!jc.HasKey(_progressBarChooser.name))
-            {
-                return;
-            }
-
             var subScene = containingAtom.containingSubScene;
             if(subScene != null)
             {
-                var atom = SuperController.singleton.GetAtomByUid(jc[_progressBarChooser.name].Value);
-                if(atom == null || atom.containingSubScene != subScene)
+                bool targetAtomInAnotherSubscene = false;
+                if(jc.HasKey(_progressBarChooser.name))
+                {
+                    var atom = SuperController.singleton.GetAtomByUid(jc[_progressBarChooser.name].Value);
+                    if(atom == null || atom.containingSubScene != subScene)
+                    {
+                        targetAtomInAnotherSubscene = true;
+                    }
+                }
+
+                if(jc.HasKey(_notOnHubUITextChooser.name))
+                {
+                    var atom = SuperController.singleton.GetAtomByUid(jc[_notOnHubUITextChooser.name].Value);
+                    if(atom == null || atom.containingSubScene != subScene)
+                    {
+                        targetAtomInAnotherSubscene = true;
+                    }
+                }
+
+                if(targetAtomInAnotherSubscene)
                 {
                     subScenePrefix = containingAtom.uid.Replace(containingAtom.uidWithoutSubScenePath, "");
                 }

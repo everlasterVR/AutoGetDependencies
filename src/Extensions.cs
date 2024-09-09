@@ -1,9 +1,27 @@
-﻿using System.Text;
+﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace everlaster
 {
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
+    static class IEnumerableExtensions
+    {
+        public static string ToPrettyString<T>(this IEnumerable<T> enumerable, string separator = "\n")
+        {
+            var sb = new StringBuilder();
+            foreach(var item in enumerable)
+            {
+                sb.Append(item);
+                sb.Append(separator);
+            }
+
+            return sb.ToString();
+        }
+    }
+
     static class StringBuilderExtensions
     {
         public static StringBuilder Clear(this StringBuilder sb)
