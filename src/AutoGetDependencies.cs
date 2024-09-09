@@ -46,7 +46,7 @@ namespace everlaster
         JSONStorableStringChooser _progressBarChooser;
         JSONStorableBool _logErrorsBool;
         JSONStorableFloat _progressFloat;
-        // TODO action to trigger teardown in case of infinite yield return null
+        JSONStorableAction _forceFinishAction;
         // TODO action to copy errors to clipboard
         // TODO action to navigate to plugin UI
 
@@ -160,6 +160,10 @@ namespace everlaster
                 RegisterBool(_logErrorsBool);
 
                 _progressFloat = new JSONStorableFloat("Download progress (%)", 0, 0, 100);
+
+                _forceFinishAction = new JSONStorableAction("Force finish", ForceFinishCallback);
+                RegisterAction(_forceFinishAction);
+
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
                 SuperController.singleton.onAtomAddedHandlers += OnAtomAdded;
                 SuperController.singleton.onAtomRemovedHandlers += OnAtomRemoved;
@@ -601,6 +605,16 @@ namespace everlaster
             catch(Exception e)
             {
                 _logBuilder.Exception(e);
+            }
+        }
+
+        // TODO test
+        void ForceFinishCallback()
+        {
+            if(_downloadCo != null)
+            {
+                StopCoroutine(_downloadCo);
+                Teardown();
             }
         }
 
