@@ -21,25 +21,17 @@ namespace everlaster
             uiDynamic.quickButtonsEnabled = false;
             var uiDynamicT = uiDynamic.gameObject.transform;
 
-            var panelRectT = uiDynamicT.Find("Panel").GetComponent<RectTransform>();
-            var size = panelRectT.sizeDelta;
-            panelRectT.sizeDelta = new Vector2(size.x, size.y - 25f);
+            {
+                var sliderRectT = uiDynamicT.Find("Slider").GetComponent<RectTransform>();
+                var pos = sliderRectT.anchoredPosition;
+                sliderRectT.anchoredPosition = new Vector2(pos.x, pos.y - 22.5f);
+            }
 
-            var textRectT = uiDynamicT.Find("Text").GetComponent<RectTransform>();
-            var pos = textRectT.anchoredPosition;
-            textRectT.anchoredPosition = new Vector2(pos.x, pos.y - 12f);
-
-            var valueInputFieldRectT = uiDynamicT.Find("ValueInputField").GetComponent<RectTransform>();
-            pos = valueInputFieldRectT.anchoredPosition;
-            valueInputFieldRectT.anchoredPosition = new Vector2(pos.x, pos.y - 12f);
-
-            var sliderRectT = uiDynamicT.Find("Slider").GetComponent<RectTransform>();
-            pos = sliderRectT.anchoredPosition;
-            sliderRectT.anchoredPosition = new Vector2(pos.x, pos.y - 10f);
-
-            var uiDynamicRectT = uiDynamicT.GetComponent<RectTransform>();
-            pos = uiDynamicRectT.anchoredPosition;
-            uiDynamicRectT.anchoredPosition = new Vector2(pos.x, pos.y - 10f);
+            {
+                var layoutElement = uiDynamicT.GetComponent<LayoutElement>();
+                layoutElement.minHeight -= 25f;
+                layoutElement.preferredHeight -= 25f;
+            }
         }
 
         public static void SetInteractable(this UIDynamicSlider uiDynamic, bool interactable)

@@ -43,11 +43,16 @@ namespace everlaster
         JSONStorableBool _tempEnableHubBool;
         JSONStorableBool _autoAcceptPackagePluginsBool;
         JSONStorableAction _downloadAction;
-        JSONStorableFloat _progressFloat; // TODO select UISlider from scene to act as progress bar (copy UISliderSync)
+        JSONStorableStringChooser _progressBarChooser;
         JSONStorableBool _logErrorsBool;
+        JSONStorableFloat _progressFloat;
         // TODO action to trigger teardown in case of infinite yield return null
         // TODO action to copy errors to clipboard
         // TODO action to navigate to plugin UI
+
+        Atom _progressBarAtom;
+        Slider _progressBarSlider;
+        readonly List<Atom> _uiSliders = new List<Atom>();
 
         public override void InitUI()
         {
@@ -58,6 +63,14 @@ namespace everlaster
             }
 
             UITransform.Find("Scroll View").GetComponent<Image>().color = new Color(0.85f, 0.85f, 0.85f);
+
+            enabledJSON.setCallbackFunction = _ => { };
+            enabledJSON.setJSONCallbackFunction = _ => { };
+            if(enabledJSON.toggle != null)
+            {
+                enabledJSON.toggle.interactable = false;
+            }
+
             _uiListener = UITransform.gameObject.AddComponent<UnityEventsListener>();
             _uiListener.enabledHandlers += UIEnabled;
         }
@@ -124,7 +137,7 @@ namespace everlaster
                 _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false);
                 RegisterBool(_alwaysCheckForUpdatesBool);
 
-                _findDependenciesAction = new JSONStorableAction("1. Find dependencies in meta.json", FindDependenciesCallback);
+                _findDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", FindDependenciesCallback);
                 RegisterAction(_findDependenciesAction);
 
                 _infoString = new JSONStorableString("Info", "");
@@ -132,16 +145,26 @@ namespace everlaster
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
                 RegisterBool(_tempEnableHubBool);
 
-                _autoAcceptPackagePluginsBool = new JSONStorableBool("Auto-accept package plugins", false);
+                _autoAcceptPackagePluginsBool = new JSONStorableBool("Auto-accept plugins from packages", false);
                 RegisterBool(_autoAcceptPackagePluginsBool);
 
-                _downloadAction = new JSONStorableAction("2. Download missing packages", DownloadMissingCallback);
+                _downloadAction = new JSONStorableAction("Download missing dependencies", DownloadMissingCallback);
                 RegisterAction(_downloadAction);
 
-                _progressFloat = new JSONStorableFloat("Download progress (%)", 0, 0, 100);
+                _progressBarChooser = new JSONStorableStringChooser("Progress Bar", new List<string>(), "None", "Progress Bar");
+                _progressBarChooser.setCallbackFunction = SelectProgressBarCallback;
+                _progressBarChooser.representsAtomUid = true;
+                RegisterStringChooser(_progressBarChooser);
 
                 _logErrorsBool = new JSONStorableBool("Log errors", false);
                 RegisterBool(_logErrorsBool);
+
+                _progressFloat = new JSONStorableFloat("Download progress (%)", 0, 0, 100);
+                _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
+                SuperController.singleton.onAtomAddedHandlers += OnAtomAdded;
+                SuperController.singleton.onAtomRemovedHandlers += OnAtomRemoved;
+                SuperController.singleton.onAtomUIDRenameHandlers += OnAtomRenamed;
+                RebuildUISliderOptions();
 
                 _initialized = true;
             }
@@ -165,22 +188,10 @@ namespace everlaster
 
         void CreateUI()
         {
-            {
-                var title = CreateTextField(new JSONStorableString("title", "Auto Get Dependencies"));
-                title.height = 60;
-                var layoutElement = title.GetComponent<LayoutElement>();
-                layoutElement.minHeight = 60;
-                layoutElement.preferredHeight = 60;
-                title.UItext.fontSize = 32;
-                title.UItext.fontStyle = FontStyle.Bold;
-                title.UItext.alignment = TextAnchor.LowerCenter;
-                title.backgroundColor = Color.clear;
-                var rectT = title.UItext.GetComponent<RectTransform>();
-                var pos = rectT.anchoredPosition;
-                pos.y = -15;
-                rectT.anchoredPosition = pos;
-            }
+            var layout = leftUIContent.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = 5;
 
+            CreateHeader("1. Identify Dependencies");
             CreateToggle(_searchSubDependenciesBool);
             CreateToggle(_alwaysCheckForUpdatesBool);
             {
@@ -189,7 +200,13 @@ namespace everlaster
                 _findDependenciesAction.RegisterButton(button);
             }
 
-            CreateSpacer().height = 15;
+            CreateSpacer().height = 10;
+            CreateTriggerMenuButton("On download pending...");
+            // CreateTriggerMenuButton("On disabled packages found...");
+            CreateTriggerMenuButton("On all dependencies installed...");
+
+            CreateSpacer().height = 5;
+            CreateHeader("2. Download Dependencies");
             CreateToggle(_tempEnableHubBool);
             CreateToggle(_autoAcceptPackagePluginsBool);
             {
@@ -198,6 +215,8 @@ namespace everlaster
                 _downloadAction.RegisterButton(button);
             }
 
+            CreateSpacer().height = 5;
+            CreateScrollablePopup(_progressBarChooser).popup.labelText.color = Color.black;
             {
                 var uiDynamic = CreateSlider(_progressFloat);
                 uiDynamic.valueFormat = "F0";
@@ -205,8 +224,12 @@ namespace everlaster
                 uiDynamic.SetInteractable(false);
             }
 
-            CreateSpacer().height = 15;
+            CreateSpacer().height = 10;
             CreateToggle(_logErrorsBool);
+            CreateTriggerMenuButton("On download failed...");
+
+            CreateSpacer().height = 10;
+
 
             // TODO plugin usage info
             {
@@ -236,6 +259,31 @@ namespace everlaster
             }
         }
 
+        void CreateHeader(string text)
+        {
+            var title = CreateTextField(new JSONStorableString(Guid.NewGuid().ToString().Substring(0, 4), text));
+            var layoutElement = title.GetComponent<LayoutElement>();
+            layoutElement.minHeight = 55;
+            layoutElement.preferredHeight = 55;
+            title.UItext.fontSize = 30;
+            title.UItext.fontStyle = FontStyle.Bold;
+            title.backgroundColor = Color.clear;
+            var rectT = title.UItext.GetComponent<RectTransform>();
+            var pos = rectT.anchoredPosition;
+            pos.y = -15;
+            rectT.anchoredPosition = pos;
+        }
+
+        void CreateTriggerMenuButton(string text)
+        {
+            var button = CreateButton(text);
+            button.buttonText.alignment = TextAnchor.MiddleLeft;
+            var textRectT = button.buttonText.GetComponent<RectTransform>();
+            var pos = textRectT.anchoredPosition;
+            pos.x += 15;
+            textRectT.anchoredPosition = pos;
+        }
+
         void FindDependenciesCallback()
         {
             if(_downloadCo != null)
@@ -246,8 +294,7 @@ namespace everlaster
             _pending = false;
             _finished = false;
             _downloadErrorsSb.Clear();
-            _progress = 0;
-            _progressFloat.val = 0;
+            SetProgress(0);
             SuperController.singleton.RescanPackages();
 
             // TODO find any disabled dependencies and call trigger
@@ -283,13 +330,14 @@ namespace everlaster
                 _updateNeededPackages.Reverse();
             }
 
+            if(_versionErrorPackages.Count > 0)
+            {
+                _logBuilder.Error("Version error in meta.json, see plugin UI");
+            }
+
             if(_missingPackages.Count > 0 || _updateNeededPackages.Count > 0)
             {
-                if(_versionErrorPackages.Count > 0)
-                {
-                    Debug.Log("TODO trigger on failure"); // TODO
-                }
-                else
+                if(_versionErrorPackages.Count == 0)
                 {
                     Debug.Log("TODO trigger on dependencies found & pending download"); // TODO
                 }
@@ -299,19 +347,24 @@ namespace everlaster
             }
             else
             {
-                if(_versionErrorPackages.Count > 0)
+                if(_versionErrorPackages.Count == 0)
                 {
-                    Debug.Log("TODO trigger on failure"); // TODO
-                }
-                else
-                {
-                    _progress = 1;
-                    _progressFloat.val = 100;
+                    SetProgress(1);
                     Debug.Log("TODO trigger on success"); // TODO
                 }
 
                 _finished = true;
                 UpdateFinishedInfo();
+            }
+        }
+
+        void SetProgress(float value)
+        {
+            _progress = value;
+            _progressFloat.val = value * 100;
+            if(_progressBarSlider != null)
+            {
+                _progressBarSlider.normalizedValue = value;
             }
         }
 
@@ -461,6 +514,94 @@ namespace everlaster
 
             _pending = false;
             _downloadCo = StartCoroutine(DownloadMissingViaHubCo());
+        }
+
+
+        void OnAtomAdded(Atom atom)
+        {
+            if(atom.type == "UISlider" && !_uiSliders.Contains(atom))
+            {
+                _uiSliders.Add(atom);
+            }
+
+            RebuildUISliderOptions();
+        }
+
+        void OnAtomRemoved(Atom atom)
+        {
+            if(_uiSliders.Contains(atom))
+            {
+                _uiSliders.Remove(atom);
+            }
+
+            RebuildUISliderOptions();
+            if(_progressBarAtom == atom)
+            {
+                _progressBarChooser.val = string.Empty;
+            }
+        }
+
+        void OnAtomRenamed(string oldUid, string newUid)
+        {
+            RebuildUISliderOptions();
+            if(_progressBarChooser.val == oldUid)
+            {
+                _progressBarChooser.valNoCallback = newUid;
+            }
+        }
+
+        void RebuildUISliderOptions()
+        {
+            var options = new List<string> { string.Empty };
+            var displayOptions = new List<string> { "None" };
+            options.AddRange(_uiSliders.Select(atom => atom.uid));
+            displayOptions.AddRange(_uiSliders.Select(atom => atom.uid));
+            _progressBarChooser.choices = options;
+            _progressBarChooser.displayChoices = displayOptions;
+        }
+
+        Color _tmpDisabledColor;
+
+        void SelectProgressBarCallback(string option)
+        {
+            try
+            {
+                _progressBarAtom = null;
+                if(_progressBarSlider != null)
+                {
+                    _progressBarSlider.interactable = true;
+                    var colors = _progressBarSlider.colors;
+                    colors.disabledColor = _tmpDisabledColor;
+                    _progressBarSlider.colors = colors;
+                    _progressBarSlider = null;
+                }
+
+                if(option != string.Empty)
+                {
+                    string prevOption = _progressBarAtom != null ? _progressBarAtom.uid : string.Empty;
+                    var uiSlider = _uiSliders.Find(atom => atom.uid == option);
+                    if(uiSlider == null)
+                    {
+                        _logBuilder.Error($"UISlider '{option}' not found");
+                        _progressBarChooser.valNoCallback = prevOption;
+                        return;
+                    }
+
+                    var holderT = uiSlider.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder");
+                    _progressBarSlider = holderT.Find("Slider").GetComponent<Slider>();
+                    _progressBarSlider.interactable = false;
+                    _progressBarSlider.normalizedValue = _progress;
+                    var colors = _progressBarSlider.colors;
+                    _tmpDisabledColor = colors.disabledColor;
+                    colors.disabledColor = colors.normalColor;
+                    _progressBarSlider.colors = colors;
+                    _progressBarAtom = uiSlider;
+                }
+            }
+            catch(Exception e)
+            {
+                _logBuilder.Exception(e);
+            }
         }
 
         void OnError(string message, bool teardown = true)
@@ -823,8 +964,7 @@ namespace everlaster
                         allDone = false;
                     }
 
-                    _progress = sum / count;
-                    _progressFloat.val = _progress * 100;
+                    SetProgress(sum / count);
                     if(allDone)
                     {
                         break;
@@ -975,12 +1115,49 @@ namespace everlaster
         }
 #endregion Teardown
 
+        // TODO test
+        public override void RestoreFromJSON(
+            JSONClass jc,
+            bool restorePhysical = true,
+            bool restoreAppearance = true,
+            JSONArray presetAtoms = null,
+            bool setMissingToDefault = true
+        )
+        {
+            FixRestoreFromSubscene(jc);
+            base.RestoreFromJSON(jc, restorePhysical, restoreAppearance, presetAtoms, setMissingToDefault);
+            subScenePrefix = null;
+        }
+
+        /* Ensure loading a SubScene file sets the correct value to JSONStorableStringChooser. */
+        void FixRestoreFromSubscene(JSONClass jc)
+        {
+            if(!jc.HasKey(_progressBarChooser.name))
+            {
+                return;
+            }
+
+            var subScene = containingAtom.containingSubScene;
+            if(subScene != null)
+            {
+                var atom = SuperController.singleton.GetAtomByUid(jc[_progressBarChooser.name].Value);
+                if(atom == null || atom.containingSubScene != subScene)
+                {
+                    subScenePrefix = containingAtom.uid.Replace(containingAtom.uidWithoutSubScenePath, "");
+                }
+            }
+        }
+
         void OnDestroy()
         {
             if(_uiListener != null)
             {
                 DestroyImmediate(_uiListener);
             }
+
+            SuperController.singleton.onAtomAddedHandlers -= OnAtomAdded;
+            SuperController.singleton.onAtomRemovedHandlers -= OnAtomRemoved;
+            SuperController.singleton.onAtomUIDRenameHandlers -= OnAtomRenamed;
 
             if(_downloadCo != null)
             {
