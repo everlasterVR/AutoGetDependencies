@@ -647,7 +647,7 @@ namespace everlaster
             _notOnHubUITextChooser.displayChoices = displayOptions;
         }
 
-        Color _tmpDisabledColor;
+        float _tmpAlpha;
 
         void SelectProgressBarCallback(string option)
         {
@@ -656,10 +656,7 @@ namespace everlaster
                 _progressBarAtom = null;
                 if(_progressBarSlider != null)
                 {
-                    _progressBarSlider.interactable = true;
-                    var colors = _progressBarSlider.colors;
-                    colors.disabledColor = _tmpDisabledColor;
-                    _progressBarSlider.colors = colors;
+                    RestoreSlider();
                     _progressBarSlider = null;
                 }
 
@@ -674,14 +671,15 @@ namespace everlaster
                         return;
                     }
 
-                    var holderT = uiSlider.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder");
-                    _progressBarSlider = holderT.Find("Slider").GetComponent<Slider>();
+                    var sliderT = uiSlider.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder/Slider");
+                    _progressBarSlider = sliderT.GetComponent<Slider>();
                     _progressBarSlider.interactable = false;
                     _progressBarSlider.normalizedValue = _progress;
-                    var colors = _progressBarSlider.colors;
-                    _tmpDisabledColor = colors.disabledColor;
-                    colors.disabledColor = colors.normalColor;
-                    _progressBarSlider.colors = colors;
+                    var sliderHandleImg = sliderT.Find("Handle Slide Area/Handle").GetComponent<Image>();
+                    var color  = sliderHandleImg.color;
+                    _tmpAlpha = color.a;
+                    color.a = 0;
+                    sliderHandleImg.color = color;
                     _progressBarAtom = uiSlider;
                 }
             }
@@ -689,6 +687,15 @@ namespace everlaster
             {
                 _logBuilder.Exception(e);
             }
+        }
+
+        void RestoreSlider()
+        {
+            _progressBarSlider.interactable = true;
+            var sliderHandleImg = _progressBarSlider.transform.Find("Handle Slide Area/Handle").GetComponent<Image>();
+            var color = sliderHandleImg.color;
+            color.a = _tmpAlpha;
+            sliderHandleImg.color = color;
         }
 
         void SelectNotOnHubUITextCallback(string option)
@@ -1322,6 +1329,11 @@ namespace everlaster
 
         void OnDestroy()
         {
+            if(_progressBarSlider != null)
+            {
+                RestoreSlider();
+            }
+
             if(_uiListener != null)
             {
                 DestroyImmediate(_uiListener);
