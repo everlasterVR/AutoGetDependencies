@@ -85,6 +85,13 @@ namespace everlaster
             }
         }
 
+        void OnInitError(string error)
+        {
+            _logBuilder.Error(error);
+            CreateTextField(new JSONStorableString("error", error)).backgroundColor = Color.clear;
+            enabledJSON.valNoCallback = false;
+        }
+
         public override void Init()
         {
             try
@@ -92,16 +99,14 @@ namespace everlaster
                 _logBuilder = new LogBuilder(nameof(AutoGetDependencies));
                 if(containingAtom.type == "SessionPluginManager")
                 {
-                    _logBuilder.Error("Do not add as Session Plugin."); // TODO show in UI
-                    enabledJSON.valNoCallback = false;
+                    OnInitError("Do not add as Session Plugin.");
                     return;
                 }
 
                 _metaJson = FindLoadedSceneMetaJson();
                 if(_metaJson == null)
                 {
-                    _logBuilder.Error("Invalid scene (must be from package)."); // TODO show in UI
-                    enabledJSON.valNoCallback = false;
+                    OnInitError("Invalid scene (must be from package).");
                     return;
                 }
 
@@ -109,8 +114,7 @@ namespace everlaster
                 _hubBrowse = (HubBrowse) coreControl.GetStorableByID("HubBrowseController");
                 if(_hubBrowse == null)
                 {
-                    _logBuilder.Error("HubBrowseController not found."); // TODO show in UI
-                    enabledJSON.valNoCallback = false;
+                    OnInitError("HubBrowseController not found. Hub missing... ??");
                     return;
                 }
 
