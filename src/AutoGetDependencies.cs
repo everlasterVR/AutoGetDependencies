@@ -85,7 +85,7 @@ namespace everlaster
                 _logBuilder = new LogBuilder(nameof(AutoGetDependencies));
                 if(containingAtom.type == "SessionPluginManager")
                 {
-                    _logBuilder.Error("Do not add as Session Plugin.");
+                    _logBuilder.Error("Do not add as Session Plugin."); // TODO show in UI
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -93,7 +93,7 @@ namespace everlaster
                 _metaJson = FindLoadedSceneMetaJson();
                 if(_metaJson == null)
                 {
-                    _logBuilder.Error("Invalid scene (must be from package).");
+                    _logBuilder.Error("Invalid scene (must be from package)."); // TODO show in UI
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -102,7 +102,7 @@ namespace everlaster
                 _hubBrowse = (HubBrowse) coreControl.GetStorableByID("HubBrowseController");
                 if(_hubBrowse == null)
                 {
-                    _logBuilder.Error("HubBrowseController not found.");
+                    _logBuilder.Error("HubBrowseController not found."); // TODO show in UI
                     enabledJSON.valNoCallback = false;
                     return;
                 }
@@ -149,7 +149,7 @@ namespace everlaster
             }
 
             string metaJsonPath = loadedScene.Split(':')[0] + ":/meta.json";
-            return SuperController.singleton.LoadJSON(metaJsonPath).AsObject;
+            return SuperController.singleton.LoadJSON(metaJsonPath)?.AsObject;
         }
 
         void CreateUI()
@@ -235,8 +235,9 @@ namespace everlaster
 
             // TODO find any disabled dependencies and call trigger
 
-            _anyMissing = _packages.Exists(obj => !obj.exists);
-            _anyUpdateNeeded = _packages.Exists(obj => obj.exists && obj.requireLatest && (_alwaysCheckForUpdatesBool.val || _anyMissing));
+            _anyMissing = _packages.Exists(PackageIsMissing);
+            _anyUpdateNeeded = _packages.Exists(PackageNeedsUpdate);
+
             if(_anyMissing || _anyUpdateNeeded)
             {
                 Debug.Log("TODO trigger on dependencies found & pending download");
@@ -289,6 +290,13 @@ namespace everlaster
             }
         }
 
+        // ReSharper disable MemberCanBeMadeStatic.Local
+        bool PackageHasError(PackageObj obj) => obj.error != null;
+        bool PackageIsMissing(PackageObj obj) => obj.error == null && !obj.exists;
+        bool PackageExists(PackageObj obj) => obj.error == null && obj.exists;
+        bool PackageNeedsUpdate(PackageObj obj) => (_alwaysCheckForUpdatesBool.val || _anyMissing) && obj.error == null && obj.exists && obj.requireLatest;
+        // ReSharper restore MemberCanBeMadeStatic.Local
+
         void UpdatePendingInfo()
         {
             if(!_uiCreated)
@@ -299,27 +307,10 @@ namespace everlaster
             _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
             var sb = new StringBuilder();
 
-            AppendPackagesInfo(
-                sb,
-                "Missing, download needed",
-                new Color(0.75f, 0, 0),
-                _packages,
-                obj => !obj.exists
-            );
-            AppendPackagesInfo(
-                sb,
-                "Found, check for update needed",
-                new Color(0, 0, 0.50f),
-                _packages,
-                obj => obj.exists && obj.requireLatest && (_alwaysCheckForUpdatesBool.val || _anyMissing)
-            );
-            AppendPackagesInfo(
-                sb,
-                "Found",
-                new Color(0, 0.50f, 0),
-                _packages,
-                obj => obj.exists
-            );
+            AppendPackagesInfo(sb, "Version error", new Color(0.75f, 0, 0), _packages, PackageHasError);
+            AppendPackagesInfo(sb, "Missing, download needed", new Color(0.75f, 0, 0), _packages, PackageIsMissing);
+            AppendPackagesInfo(sb, "Found, check for update needed", new Color(0, 0, 0.50f), _packages, PackageNeedsUpdate);
+            AppendPackagesInfo(sb, "Found", new Color(0, 0.50f, 0), _packages, PackageExists);
 
             SetJssText(_infoString, sb);
         }
@@ -372,14 +363,7 @@ namespace everlaster
                 sb.Append("\n\n");
             }
 
-            AppendPackagesInfo(
-                sb,
-                "Not on Hub",
-                new Color(0.75f, 0, 0),
-                _notOnHubPackages,
-                obj => true
-            );
-
+            AppendPackagesInfo(sb, "Not on Hub", new Color(0.75f, 0, 0), _notOnHubPackages, obj => true);
             SetJssText(_infoString, sb);
         }
 
