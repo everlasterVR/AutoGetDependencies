@@ -1,3 +1,4 @@
+using MVR.FileManagementSecure;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -5,6 +6,7 @@ using SimpleJSON;
 using MVR.Hub;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -23,6 +25,7 @@ namespace everlaster
         readonly string _subDependencyColor = ColorUtility.ToHtmlStringRGBA(new Color(0.4f, 0.4f, 0.4f));
         readonly Color _paleBlue = new Color(0.71f, 0.71f, 1.00f);
         readonly List<PackageObj> _packages = new List<PackageObj>();
+        readonly List<PackageObj> _disabledPackages = new List<PackageObj>();
         readonly List<PackageObj> _versionErrorPackages = new List<PackageObj>();
         readonly List<PackageObj> _missingPackages = new List<PackageObj>();
         readonly List<PackageObj> _updateNeededPackages = new List<PackageObj>();
@@ -47,22 +50,24 @@ namespace everlaster
         JSONStorableStringChooser _progressBarChooser;
         JSONStorableBool _logErrorsBool;
         JSONStorableStringChooser _notOnHubUITextChooser;
-        // JSONStorableStringChooser _disabledUITextChooser; // TODO
+        JSONStorableStringChooser _disabledUITextChooser;
 
         JSONStorableFloat _progressFloat;
         JSONStorableAction _forceFinishAction;
         JSONStorableAction _copyErrorsToClipboardAction;
         JSONStorableAction _copyNotOnHubToClipboardAction;
-        // JSONStorableAction _copyDisabledToClipboardAction; // TODO
+        JSONStorableAction _copyDisabledToClipboardAction;
         // JSONStorableAction _navigateToPluginUIAction; // TODO
         // TODO special handling for include in VAM packages
         // TODO check VAM version latest
 
-        Atom _progressBarAtom;
-        Slider _progressBarSlider;
+        Atom _progressUIAtom;
+        Slider _progressSlider;
         readonly List<Atom> _uiSliders = new List<Atom>();
-        Atom _notOnHubAtom;
+        Atom _notOnHubUIAtom;
         Text _notOnHubText;
+        Atom _disabledUIAtom;
+        Text _disabledText;
         readonly List<Atom> _uiTexts = new List<Atom>();
         readonly List<UIPopup> _popups = new List<UIPopup>();
 
@@ -74,7 +79,7 @@ namespace everlaster
                 return;
             }
 
-            UITransform.Find("Scroll View").GetComponent<Image>().color = new Color(0.85f, 0.85f, 0.85f);
+            UITransform.Find("Scroll View").GetComponent<UnityEngine.UI.Image>().color = new Color(0.85f, 0.85f, 0.85f);
 
             enabledJSON.setCallbackFunction = _ => { };
             enabledJSON.setJSONCallbackFunction = _ => { };
@@ -173,10 +178,15 @@ namespace everlaster
                 _logErrorsBool = new JSONStorableBool("Log errors", false);
                 RegisterBool(_logErrorsBool);
 
-                _notOnHubUITextChooser = new JSONStorableStringChooser("'Not on Hub' UIText", new List<string>(), "", "Not\u00A0on\u00A0Hub UIText");
+                _notOnHubUITextChooser = new JSONStorableStringChooser("Not on Hub List", new List<string>(), "", "Not\u00A0on\u00A0Hub List");
                 _notOnHubUITextChooser.setCallbackFunction = SelectNotOnHubUITextCallback;
                 _notOnHubUITextChooser.representsAtomUid = true;
                 RegisterStringChooser(_notOnHubUITextChooser);
+
+                _disabledUITextChooser = new JSONStorableStringChooser("Disabled List", new List<string>(), "", "Disabled List");
+                _disabledUITextChooser.setCallbackFunction = SelectDisabledUITextCallback;
+                _disabledUITextChooser.representsAtomUid = true;
+                RegisterStringChooser(_disabledUITextChooser);
 
                 _progressFloat = new JSONStorableFloat("Download progress (%)", 0, 0, 100);
 
@@ -186,8 +196,11 @@ namespace everlaster
                 _copyErrorsToClipboardAction = new JSONStorableAction("Copy errors to clipboard", CopyErrorsToClipboardCallback);
                 RegisterAction(_copyErrorsToClipboardAction);
 
-                _copyNotOnHubToClipboardAction = new JSONStorableAction("Copy 'Not on Hub' names to clipboard", CopyNotOnHubToClipboardCallback);
+                _copyNotOnHubToClipboardAction = new JSONStorableAction("Copy 'Not on Hub' names to clipboard", () => CopyToClipboard(_notOnHubPackages));
                 RegisterAction(_copyNotOnHubToClipboardAction);
+
+                _copyDisabledToClipboardAction = new JSONStorableAction("Copy disabled names to clipboard", () => CopyToClipboard(_disabledPackages));
+                RegisterAction(_copyDisabledToClipboardAction);
 
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
                 _uiTexts.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UIText"));
@@ -257,10 +270,9 @@ namespace everlaster
 
             CreateSpacer().height = 10;
             CreateTriggerMenuButton("On download failed...");
-
-            CreateSpacer().height = 10;
             CreateToggle(_logErrorsBool);
             ConfigurePopup(CreateScrollablePopup(_notOnHubUITextChooser), 470, 0, true);
+            ConfigurePopup(CreateScrollablePopup(_disabledUITextChooser), 470, 0, true);
 
             // TODO plugin usage info
             {
@@ -358,19 +370,47 @@ namespace everlaster
             SetProgress(0);
             SuperController.singleton.RescanPackages();
 
-            // TODO find any disabled dependencies and call trigger
             _packages.Clear();
+            _disabledPackages.Clear();
             _versionErrorPackages.Clear();
             _missingPackages.Clear();
             _updateNeededPackages.Clear();
             _installedPackages.Clear();
-            FindDependencies(_metaJson, _searchSubDependenciesBool.val);
+
+            try
+            {
+                FindDependenciesRecursive(_metaJson, _searchSubDependenciesBool.val);
+            }
+            catch(Exception e)
+            {
+                _logBuilder.Exception("Finding pcakages failed", e);
+            }
+
+            try
+            {
+                var packagesDict = _packages.ToDictionary(obj => obj.name, obj => obj);
+                GC.Collect();
+                float startMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
+                IdentifyDisabledPackages(packagesDict);
+                float endMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
+                _logBuilder.Message($"FindDisabledPackages increased heap size by {endMemory - startMemory:0.00} MB");
+            }
+            catch(Exception e)
+            {
+                _logBuilder.Exception("Identifying disabled packages failed", e);
+                _disabledPackages.Clear();
+            }
+
+            // TODO for .latest packages, identify if the latest installed version is disabled?
+            // - Mark as "soft disabled", i.e. optional for the user to enable
+            // - Unknown before download if Hub has a newer version
 
             // populate lists
             {
                 foreach(var obj in _packages)
                 {
                     if(obj.versionError != null) _versionErrorPackages.Add(obj);
+                    else if(obj.disabled) _disabledPackages.Add(obj);
                     else if(!obj.exists) _missingPackages.Add(obj);
                     else _installedPackages.Add(obj);
                 }
@@ -393,7 +433,19 @@ namespace everlaster
 
             if(_versionErrorPackages.Count > 0)
             {
-                _logBuilder.Error("Version error in meta.json, see plugin UI");
+                if(!_uiListener.active)
+                {
+                    _logBuilder.Error("Version error in meta.json, see plugin UI");
+                }
+            }
+
+            if(_disabledPackages.Count > 0)
+            {
+                Debug.Log("TODO trigger on disabled packages found"); // TODO
+                if(_disabledText != null)
+                {
+                    _disabledText.text = _disabledPackages.Select(obj => obj.name).ToPrettyString();
+                }
             }
 
             if(_missingPackages.Count > 0 || _updateNeededPackages.Count > 0)
@@ -422,45 +474,128 @@ namespace everlaster
         {
             _progress = value;
             _progressFloat.val = value * 100;
-            if(_progressBarSlider != null)
+            if(_progressSlider != null)
             {
-                _progressBarSlider.normalizedValue = value;
+                _progressSlider.normalizedValue = value;
             }
         }
 
-        void FindDependencies(JSONClass json, bool recursive = false, int depth = 0)
+        void FindDependenciesRecursive(JSONClass json, bool recursive = false, int depth = 0)
         {
-            try
+            var dependenciesJc = json["dependencies"].AsObject;
+            if(dependenciesJc == null)
             {
-                var dependenciesJc = json["dependencies"].AsObject;
-                if(dependenciesJc == null)
+                return;
+            }
+
+            foreach(string key in dependenciesJc.Keys)
+            {
+                string trimmed = key.Trim();
+                string[] parts = trimmed.Split('.');
+                if(parts.Length != 3)
                 {
-                    return;
+                    continue;
                 }
 
-                foreach(string key in dependenciesJc.Keys)
+                if(!_packages.Exists(obj => obj.name == trimmed))
                 {
-                    string trimmed = key.Trim();
-                    string[] parts = trimmed.Split('.');
-                    if(parts.Length != 3)
-                    {
-                        continue;
-                    }
+                    _packages.Add(new PackageObj(trimmed, parts, depth > 0));
+                }
 
-                    if(!_packages.Exists(obj => obj.name == trimmed))
-                    {
-                        _packages.Add(new PackageObj(trimmed, parts, depth > 0));
-                    }
+                if(recursive)
+                {
+                    FindDependenciesRecursive(dependenciesJc[key].AsObject, true, depth + 1);
+                }
+            }
+        }
 
-                    if(recursive)
+        static void IdentifyDisabledPackages(Dictionary<string, PackageObj> packagesDict)
+        {
+            var queue = new Queue<string>();
+            queue.Enqueue("AddonPackages");
+
+            var disabledPackages = new HashSet<string>();
+            var packageFileMap = new Dictionary<string, List<string>>();
+            var regex = new Regex(@"\.(\d+)\.var$", RegexOptions.Compiled);
+
+            while(queue.Count > 0)
+            {
+                string dir = queue.Dequeue();
+                string[] subDirs = FileManagerSecure.GetDirectories(dir);
+                for(int i = 0; i < subDirs.Length; i++)
+                {
+                    queue.Enqueue(subDirs[i]);
+                }
+
+                string[] files = FileManagerSecure.GetFiles(dir);
+                for(int i = 0; i < files.Length; i++)
+                {
+                    string file = files[i];
+                    if(file.EndsWith(".disabled"))
                     {
-                        FindDependencies(dependenciesJc[key].AsObject, true, depth + 1);
+                        // Extract the package name (e.g., "Author.Package.13.var" from "Author.Package.13.var.disabled")
+                        string packageName = file.Substring(dir.Length + 1, file.Length - dir.Length - 1 - 9);
+                        if(packageName.EndsWith(".var"))
+                        {
+                            string basePackageName = packageName.Substring(0, packageName.Length - 4);
+                            PackageObj packageObj;
+                            if(packagesDict.TryGetValue(basePackageName, out packageObj))
+                            {
+                                packageObj.disabled = true;
+                            }
+
+                            disabledPackages.Add(basePackageName);
+                        }
+                    }
+                    else if(regex.IsMatch(file))
+                    {
+                        // Extract the group name (e.g., "Author.Package" from "Author.Package.13.var")
+                        int secondToLastIndex = file.LastIndexOf('.', file.Length - 5);
+                        string groupName = file.Substring(dir.Length + 1, secondToLastIndex - dir.Length - 1);
+                        if(!packageFileMap.ContainsKey(groupName))
+                        {
+                            packageFileMap[groupName] = new List<string>();
+                        }
+                        packageFileMap[groupName].Add(file);
                     }
                 }
             }
-            catch(Exception e)
+
+            List<string> vammoan;
+            packageFileMap.TryGetValue("hazmhox.vammoan", out vammoan);
+            Debug.Log(vammoan == null ? "vammoan not found" : $"vammoan found: {vammoan.ToPrettyString()}");
+
+            // After processing all directories and files, check the 'latest' packages
+            foreach(var pair in packagesDict)
             {
-                _logBuilder.Exception(e);
+                if(!pair.Key.EndsWith(".latest"))
+                {
+                    continue;
+                }
+
+                // Get the base package group name (e.g., "Author.Package")
+                string groupName = pair.Key.Substring(0, pair.Key.Length - 7);
+                if(packageFileMap.ContainsKey(groupName))
+                {
+                    bool allDisabled = true;
+                    var group = packageFileMap[groupName];
+                    for(int i = 0; i < group.Count; i++)
+                    {
+                        string file = group[i];
+                        int idx = file.LastIndexOf('\\');
+                        string specificPackageName = file.Substring(idx + 1, file.Length - idx - 5); // Extract "Author.Package.13"
+                        if(!disabledPackages.Contains(specificPackageName))
+                        {
+                            allDisabled = false;
+                            break;
+                        }
+                    }
+
+                    if(allDisabled)
+                    {
+                        pair.Value.disabled = true;
+                    }
+                }
             }
         }
 
@@ -478,7 +613,10 @@ namespace everlaster
             {
                 AppendPackagesInfo(sb, "Version error in meta.json", _errorColor, _versionErrorPackages);
             }
-
+            if(_disabledPackages.Count > 0)
+            {
+                AppendPackagesInfo(sb, "Disabled", _errorColor, _disabledPackages);
+            }
             AppendPackagesInfo(sb, "Missing, download needed", _errorColor, _missingPackages);
             AppendPackagesInfo(sb, "Installed, check for update needed", _updateNeededColor, _updateNeededPackages);
             AppendPackagesInfo(sb, "Installed, no update needed", _okColor, _installedPackages);
@@ -499,8 +637,7 @@ namespace everlaster
             {
                 if(obj.isSubDependency)
                 {
-                    string indent = new string('\u00A0', 3);
-                    sb.AppendFormat("{0}<color=#{1}>-\u00A0{2}</color>\n", indent, _subDependencyColor, obj.name);
+                    sb.AppendFormat("<color=#{0}>-\u00A0{1}</color>\n", _subDependencyColor, obj.name);
                 }
                 else
                 {
@@ -530,6 +667,10 @@ namespace everlaster
                 {
                     AppendPackagesInfo(sb, "Version error in meta.json", _errorColor, _versionErrorPackages);
                 }
+                if(_disabledPackages.Count > 0)
+                {
+                    AppendPackagesInfo(sb, "Disabled", _errorColor, _disabledPackages);
+                }
                 if(_notOnHubPackages.Count > 0)
                 {
                     AppendPackagesInfo(sb, "Packages not on Hub", _errorColor, _notOnHubPackages);
@@ -550,6 +691,7 @@ namespace everlaster
         {
             try
             {
+                // TODO test
                 if(sb.Length > 16000)
                 {
                     const string truncated = "\n\n(too long, truncated)";
@@ -597,7 +739,8 @@ namespace everlaster
             {
                 _uiSliders.Remove(atom);
                 RebuildUISliderOptions();
-                if(_progressBarAtom == atom)
+
+                if(_progressUIAtom == atom)
                 {
                     _progressBarChooser.val = "";
                 }
@@ -606,9 +749,15 @@ namespace everlaster
             {
                 _uiTexts.Remove(atom);
                 RebuildUITextOptions();
-                if(_notOnHubAtom == atom)
+
+                if(_notOnHubUIAtom == atom)
                 {
                     _notOnHubUITextChooser.val = "";
+                }
+
+                if(_disabledUIAtom == atom)
+                {
+                    _disabledUITextChooser.val = "";
                 }
             }
         }
@@ -624,6 +773,10 @@ namespace everlaster
             if(_notOnHubUITextChooser.val == oldUid)
             {
                 _notOnHubUITextChooser.valNoCallback = newUid;
+            }
+            if(_disabledUITextChooser.val == oldUid)
+            {
+                _disabledUITextChooser.valNoCallback = newUid;
             }
         }
 
@@ -645,6 +798,8 @@ namespace everlaster
             displayOptions.AddRange(_uiTexts.Select(atom => atom.uid));
             _notOnHubUITextChooser.choices = options;
             _notOnHubUITextChooser.displayChoices = displayOptions;
+            _disabledUITextChooser.choices = options;
+            _disabledUITextChooser.displayChoices = displayOptions;
         }
 
         float _tmpAlpha;
@@ -653,16 +808,16 @@ namespace everlaster
         {
             try
             {
-                _progressBarAtom = null;
-                if(_progressBarSlider != null)
+                _progressUIAtom = null;
+                if(_progressSlider != null)
                 {
                     RestoreSlider();
-                    _progressBarSlider = null;
+                    _progressSlider = null;
                 }
 
                 if(option != "")
                 {
-                    string prevOption = _progressBarAtom != null ? _progressBarAtom.uid : "";
+                    string prevOption = _progressUIAtom != null ? _progressUIAtom.uid : "";
                     var uiSlider = _uiSliders.Find(atom => atom.uid == option);
                     if(uiSlider == null)
                     {
@@ -672,15 +827,15 @@ namespace everlaster
                     }
 
                     var sliderT = uiSlider.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder/Slider");
-                    _progressBarSlider = sliderT.GetComponent<Slider>();
-                    _progressBarSlider.interactable = false;
-                    _progressBarSlider.normalizedValue = _progress;
-                    var sliderHandleImg = sliderT.Find("Handle Slide Area/Handle").GetComponent<Image>();
+                    _progressSlider = sliderT.GetComponent<Slider>();
+                    _progressSlider.interactable = false;
+                    _progressSlider.normalizedValue = _progress;
+                    var sliderHandleImg = sliderT.Find("Handle Slide Area/Handle").GetComponent<UnityEngine.UI.Image>();
                     var color  = sliderHandleImg.color;
                     _tmpAlpha = color.a;
                     color.a = 0;
                     sliderHandleImg.color = color;
-                    _progressBarAtom = uiSlider;
+                    _progressUIAtom = uiSlider;
                 }
             }
             catch(Exception e)
@@ -691,8 +846,8 @@ namespace everlaster
 
         void RestoreSlider()
         {
-            _progressBarSlider.interactable = true;
-            var sliderHandleImg = _progressBarSlider.transform.Find("Handle Slide Area/Handle").GetComponent<Image>();
+            _progressSlider.interactable = true;
+            var sliderHandleImg = _progressSlider.transform.Find("Handle Slide Area/Handle").GetComponent<UnityEngine.UI.Image>();
             var color = sliderHandleImg.color;
             color.a = _tmpAlpha;
             sliderHandleImg.color = color;
@@ -702,12 +857,12 @@ namespace everlaster
         {
             try
             {
-                _notOnHubAtom = null;
+                _notOnHubUIAtom = null;
                 _notOnHubText = null;
 
                 if(option != "")
                 {
-                    string prevOption = _notOnHubAtom != null ? _notOnHubAtom.uid : "";
+                    string prevOption = _notOnHubUIAtom != null ? _notOnHubUIAtom.uid : "";
                     var uiText = _uiTexts.Find(atom => atom.uid == option);
                     if(uiText == null)
                     {
@@ -718,7 +873,36 @@ namespace everlaster
 
                     var holderT = uiText.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder");
                     _notOnHubText = holderT.Find("Text").GetComponent<Text>();
-                    _notOnHubAtom = uiText;
+                    _notOnHubUIAtom = uiText;
+                }
+            }
+            catch(Exception e)
+            {
+                _logBuilder.Exception(e);
+            }
+        }
+
+        void SelectDisabledUITextCallback(string option)
+        {
+            try
+            {
+                _disabledUIAtom = null;
+                _disabledText = null;
+
+                if(option != "")
+                {
+                    string prevOption = _disabledUIAtom != null ? _disabledUIAtom.uid : "";
+                    var uiText = _uiTexts.Find(atom => atom.uid == option);
+                    if(uiText == null)
+                    {
+                        _logBuilder.Error($"UIText '{option}' not found");
+                        _disabledUITextChooser.valNoCallback = prevOption;
+                        return;
+                    }
+
+                    var holderT = uiText.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder");
+                    _disabledText = holderT.Find("Text").GetComponent<Text>();
+                    _disabledUIAtom = uiText;
                 }
             }
             catch(Exception e)
@@ -759,11 +943,11 @@ namespace everlaster
         }
 
         // TODO test
-        void CopyNotOnHubToClipboardCallback()
+        static void CopyToClipboard(List<PackageObj> packages)
         {
-            if(_notOnHubPackages.Count > 0)
+            if(packages.Count > 0)
             {
-                GUIUtility.systemCopyBuffer = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
+                GUIUtility.systemCopyBuffer = packages.Select(obj => obj.name).ToPrettyString();
             }
         }
 
@@ -1257,21 +1441,21 @@ namespace everlaster
             // success path; suppresses error triggers and not on Hub packages triggers if all packages happen to somehow exist regardless
             if(_packages.TrueForAll(obj => obj.existsAndIsValid))
             {
-                // TODO trigger on success
+                Debug.Log("TODO trigger on success"); // TODO
             }
             // failure path
             else
             {
                 if(_notOnHubPackages.Count > 0)
                 {
-                    // TODO trigger on not on Hub packages found
+                    Debug.Log("TODO trigger on not on Hub packages found"); // TODO
                     if(_notOnHubText != null)
                     {
                         _notOnHubText.text = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
                     }
                 }
 
-                // TODO trigger on failure
+                Debug.Log("TODO trigger on failure"); // TODO
             }
 
             _downloadCo = null;
@@ -1329,7 +1513,7 @@ namespace everlaster
 
         void OnDestroy()
         {
-            if(_progressBarSlider != null)
+            if(_progressSlider != null)
             {
                 RestoreSlider();
             }

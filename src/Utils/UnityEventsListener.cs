@@ -6,6 +6,7 @@ namespace everlaster
 {
     sealed class UnityEventsListener : MonoBehaviour, IPointerClickHandler
     {
+        public bool active => gameObject.activeInHierarchy;
         public Action enabledHandlers;
         public Action disabledHandlers;
         public Action<PointerEventData> clickHandlers;

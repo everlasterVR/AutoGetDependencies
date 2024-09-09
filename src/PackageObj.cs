@@ -8,13 +8,15 @@ namespace everlaster
         public readonly string name;
         public readonly string groupName;
         public readonly bool requireLatest;
-        public string versionError { get; }
+        public readonly string versionError;
+        public bool disabled;
         public string hubItemError { get; private set; }
 
         // ReSharper disable once NotAccessedField.Global
         public int version = -1;
         public bool exists { get; private set; }
-        public bool existsAndIsValid => exists && versionError == null;
+        public bool existsAndIsValid => exists && versionError == null && !disabled;
+
         public readonly bool isSubDependency;
         public HubResourcePackageUI packageUI;
         public HubResourcePackage connectedItem;
