@@ -58,9 +58,9 @@ namespace everlaster
         JSONStorableAction _copyNotOnHubToClipboardAction;
         JSONStorableAction _copyDisabledToClipboardAction;
         // JSONStorableAction _navigateToPluginUIAction; // TODO
-        // TODO special handling for include in VAM packages
-        // TODO check VAM version latest
+        // TODO special handling for included in VAM packages
 
+        bool isLatestVam;
         Atom _progressUIAtom;
         Slider _progressSlider;
         readonly List<Atom> _uiSliders = new List<Atom>();
@@ -150,6 +150,10 @@ namespace everlaster
                     return;
                 }
 
+                #if VAM_GT_1_22
+                isLatestVam = true;
+                #endif
+
                 _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", false);
                 RegisterBool(_searchSubDependenciesBool);
 
@@ -233,7 +237,7 @@ namespace everlaster
         void CreateUI()
         {
             var layout = leftUIContent.GetComponent<VerticalLayoutGroup>();
-            layout.spacing = 5;
+            layout.spacing = 0.5f;
 
             CreateHeader("1. Identify Dependencies");
             CreateToggle(_searchSubDependenciesBool);
@@ -246,8 +250,9 @@ namespace everlaster
 
             CreateSpacer().height = 10;
             CreateTriggerMenuButton("On download pending...");
-            // CreateTriggerMenuButton("On disabled packages found...");
+            CreateTriggerMenuButton("On disabled packages found...");
             CreateTriggerMenuButton("On all dependencies installed...");
+            CreateTriggerMenuButton("If VAM not latest (>= v1.22)...");
 
             CreateSpacer().height = 5;
             CreateHeader("2. Download Dependencies");
@@ -313,7 +318,7 @@ namespace everlaster
             uiDynamic.backgroundColor = Color.clear;
             var rectT = uiDynamic.UItext.GetComponent<RectTransform>();
             var pos = rectT.anchoredPosition;
-            pos.y = -15;
+            pos.y = -10;
             rectT.anchoredPosition = pos;
         }
 
@@ -383,13 +388,13 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                _logBuilder.Exception("Finding pcakages failed", e);
+                _logBuilder.Exception("Finding packages failed", e);
             }
 
             try
             {
                 var packagesDict = _packages.ToDictionary(obj => obj.name, obj => obj);
-                GC.Collect();
+                GC.Collect(); // TODO remove
                 float startMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
                 IdentifyDisabledPackages(packagesDict);
                 float endMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
