@@ -51,18 +51,22 @@ namespace everlaster
         {
             if(packageUI == null || connectedItem == null)
             {
-                hubItemError = "Failed to register hub item";
-                return;
-            }
-
-            this.packageUI = packageUI;
-            this.connectedItem = connectedItem;
-            if(requireLatest)
-            {
-                version = latestVersion;
-                if(version == -1)
+                if(requireLatest && exists)
                 {
-                    hubItemError = "Failed to determine latest version";
+                    // assumed that found package is already the latest available on the Hub
+                }
+                else
+                {
+                    hubItemError = "Failed to register hub item";
+                }
+            }
+            else
+            {
+                this.packageUI = packageUI;
+                this.connectedItem = connectedItem;
+                if(requireLatest)
+                {
+                    version = latestVersion;
                 }
             }
         }

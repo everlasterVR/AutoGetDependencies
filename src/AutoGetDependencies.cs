@@ -18,7 +18,7 @@ namespace everlaster
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
         readonly string _errorColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0, 0));
-        readonly string _updateNeededColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0.4f, 0f));
+        readonly string _updateNeededColor = ColorUtility.ToHtmlStringRGBA(new Color(0.44f, 0.44f, 0f));
         readonly string _okColor = ColorUtility.ToHtmlStringRGBA(new Color(0, 0.50f, 0));
         readonly string _subDependencyColor = ColorUtility.ToHtmlStringRGBA(new Color(0.4f, 0.4f, 0.4f));
         readonly List<PackageObj> _packages = new List<PackageObj>();
@@ -214,8 +214,15 @@ namespace everlaster
                 DestroyImmediate(layoutElement);
                 var rectT = infoField.GetComponent<RectTransform>();
                 rectT.pivot = Vector2.zero;
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1200);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1210);
                 rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
+                var uiTextRectT = uiDynamic.UItext.GetComponent<RectTransform>();
+                var uiTextPos = uiTextRectT.anchoredPosition;
+                uiTextPos.y -= 10;
+                uiTextRectT.anchoredPosition = uiTextPos;
+                var uiTextSize = uiTextRectT.sizeDelta;
+                uiTextSize.y -= 10;
+                uiTextRectT.sizeDelta = uiTextSize;
                 uiDynamic.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
                 var scrollView = infoField.Find("Scroll View");
                 var scrollRect = scrollView.GetComponent<ScrollRect>();
@@ -357,14 +364,14 @@ namespace everlaster
 
             AppendPackagesInfo(sb, "Missing, download needed", _errorColor, _missingPackages);
             AppendPackagesInfo(sb, "Installed, check for update needed", _updateNeededColor, _updateNeededPackages);
-            AppendPackagesInfo(sb, "Installed", _okColor, _installedPackages);
+            AppendPackagesInfo(sb, "Installed, no update needed", _okColor, _installedPackages);
 
             SetJssText(_infoString, sb);
         }
 
         void AppendPackagesInfo(StringBuilder sb, string title, string titleColor, List<PackageObj> packages)
         {
-            sb.AppendFormat("<size=28><color=#{0}><b>{1}:</b></color></size>\n\n", titleColor, title);
+            sb.AppendFormat("<size=30><color=#{0}><b>{1}:</b></color></size>\n\n", titleColor, title);
             if(packages.Count == 0)
             {
                 sb.Append("None.\n\n");
@@ -398,7 +405,7 @@ namespace everlaster
 
             if(_packages.TrueForAll(obj => obj.existsAndIsValid))
             {
-                sb.Append("All dependencies are installed!\n\n");
+                sb.AppendFormat("<size=30><color=#{0}><b>All dependencies are installed!</b></color></size>\n\n", _okColor);
             }
             else
             {
@@ -412,7 +419,7 @@ namespace everlaster
                 }
                 if(_downloadErrorsSb != null)
                 {
-                    sb.AppendFormat("<size=28><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
+                    sb.AppendFormat("<size=30><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
                     sb.Append(_downloadErrorsSb);
                     sb.Append("\n\n");
                 }
@@ -716,11 +723,10 @@ namespace everlaster
                         string error = $"'{obj.name}' error: {obj.hubItemError}";
                         if(_logErrorsBool.val) _logBuilder.Error(error);
                         _downloadErrorsSb.AppendLine(error);
-                        if(obj.connectedItem != null && !obj.connectedItem.CanBeDownloaded)
-                        {
-                            _notOnHubPackages.Add(obj);
-                        }
+                    }
 
+                    if(obj.connectedItem == null)
+                    {
                         continue;
                     }
 
@@ -750,9 +756,9 @@ namespace everlaster
 
 #region Download
             int count = pendingPackages.Count;
-            if(count <= 0)
+            if(count <= 0) // probably because only checking for updates and none found
             {
-                OnError("No packages can be downloaded.");
+                Teardown();
                 yield break;
             }
 
