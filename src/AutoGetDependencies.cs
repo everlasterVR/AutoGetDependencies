@@ -69,7 +69,7 @@ namespace everlaster
         TriggerWrapper _onDownloadFailedTrigger;
         TriggerWrapper _onNotOnHubPackagesFoundTrigger;
 
-        bool isLatestVam;
+        bool _isLatestVam;
         Atom _progressUIAtom;
         Slider _progressSlider;
         readonly List<Atom> _uiSliders = new List<Atom>();
@@ -156,7 +156,9 @@ namespace everlaster
                 }
 
                 #if VAM_GT_1_22
-                isLatestVam = true;
+                _isLatestVam = true;
+                #else
+                _isLatestVam = false;
                 #endif
 
                 _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", false);
@@ -474,7 +476,7 @@ namespace everlaster
                 _updateRequiredPackages.Reverse();
             }
 
-            if(!isLatestVam)
+            if(!_isLatestVam)
             {
                 _ifVamNotLatestTrigger.Trigger();
             }
