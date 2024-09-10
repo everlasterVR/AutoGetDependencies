@@ -16,19 +16,21 @@ namespace everlaster
     sealed class AutoGetDependencies : MVRScript
     {
         UnityEventsListener _uiListener;
+        Transform _scrollView;
         bool _uiCreated;
         public LogBuilder logBuilder { get; private set; }
         Bindings _bindings;
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
-        readonly string _errorColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0, 0));
-        readonly string _updateRequiredColor = ColorUtility.ToHtmlStringRGBA(new Color(0.44f, 0.44f, 0f));
-        readonly string _okColor = ColorUtility.ToHtmlStringRGBA(new Color(0, 0.50f, 0));
-        readonly string _subDependencyColor = ColorUtility.ToHtmlStringRGBA(new Color(0.4f, 0.4f, 0.4f));
-        readonly Color _paleBlue = new Color(0.71f, 0.71f, 1.00f);
+        readonly static string _errorColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0, 0));
+        readonly static string _updateRequiredColor = ColorUtility.ToHtmlStringRGBA(new Color(0.44f, 0.44f, 0f));
+        readonly static string _okColor = ColorUtility.ToHtmlStringRGBA(new Color(0, 0.50f, 0));
+        readonly static string _subDependencyColor = ColorUtility.ToHtmlStringRGBA(Color.gray);
+        readonly static Color _paleBlue = new Color(0.71f, 0.71f, 1.00f);
         readonly List<PackageObj> _packages = new List<PackageObj>();
         readonly List<PackageObj> _disabledPackages = new List<PackageObj>();
         readonly List<PackageObj> _versionErrorPackages = new List<PackageObj>();
+        readonly List<string> _missingVamBundledPackageNames = new List<string>();
         readonly List<PackageObj> _missingPackages = new List<PackageObj>();
         readonly List<PackageObj> _updateRequiredPackages = new List<PackageObj>();
         readonly List<PackageObj> _installedPackages = new List<PackageObj>();
@@ -59,15 +61,15 @@ namespace everlaster
         JSONStorableAction _copyNotOnHubToClipboardAction;
         JSONStorableAction _copyDisabledToClipboardAction;
         JSONStorableAction _navigateToPluginUIAction;
-        // TODO special handling for included in VAM packages
 
         readonly Dictionary<string, TriggerWrapper> _triggers = new Dictionary<string, TriggerWrapper>();
-        TriggerWrapper _onDownloadPendingTrigger;
-        TriggerWrapper _onDisabledPackagesFoundTrigger;
-        TriggerWrapper _onAllDependenciesInstalledTrigger;
+        TriggerWrapper _ifDownloadPendingTrigger;
+        TriggerWrapper _ifDisabledPackagesFoundTrigger;
+        TriggerWrapper _ifAllDependenciesInstalledTrigger;
+        TriggerWrapper _ifVamBundledPackagesMissingTrigger;
         TriggerWrapper _ifVamNotLatestTrigger;
-        TriggerWrapper _onDownloadFailedTrigger;
-        TriggerWrapper _onNotOnHubPackagesFoundTrigger;
+        TriggerWrapper _ifDownloadFailedTrigger;
+        TriggerWrapper _ifNotOnHubPackagesFoundTrigger;
 
         bool _isLatestVam;
         Atom _progressUIAtom;
@@ -84,7 +86,8 @@ namespace everlaster
                 return;
             }
 
-            UITransform.Find("Scroll View").GetComponent<UnityEngine.UI.Image>().color = new Color(0.85f, 0.85f, 0.85f);
+            _scrollView = UITransform.Find("Scroll View");
+            _scrollView.GetComponent<UnityEngine.UI.Image>().color = new Color(0.85f, 0.85f, 0.85f);
 
             enabledJSON.setCallbackFunction = _ => { };
             enabledJSON.setJSONCallbackFunction = _ => { };
@@ -167,7 +170,7 @@ namespace everlaster
                 _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false);
                 RegisterBool(_alwaysCheckForUpdatesBool);
 
-                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", false);
+                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", true);
                 RegisterBool(_identifyDisabledPackagesBool);
 
                 _findDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", FindDependenciesCallback);
@@ -210,12 +213,13 @@ namespace everlaster
                 RegisterAction(_navigateToPluginUIAction);
 
                 SimpleTriggerHandler.LoadAssets();
-                _onDownloadPendingTrigger = AddTrigger("On Download Pending", "On download pending...");
-                _onDisabledPackagesFoundTrigger = AddTrigger("On Disabled Packages Found", "On disabled packages found...");
-                _onAllDependenciesInstalledTrigger = AddTrigger("On All Dependencies Installed", "On all dependencies installed...");
+                _ifDownloadPendingTrigger = AddTrigger("If Download Pending", "If download pending...");
+                _ifDisabledPackagesFoundTrigger = AddTrigger("If Disabled Packages Found", "If disabled packages found...");
+                _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed", "If all dependencies installed...");
+                _ifVamBundledPackagesMissingTrigger = AddTrigger("If VAM Bundled Packages Missing", "If VAM bundled packages missing...");
                 _ifVamNotLatestTrigger = AddTrigger("If VAM Not Latest", "If VAM not latest (>= v1.22)...", false);
-                _onDownloadFailedTrigger = AddTrigger("On Download Failed", "On download failed...");
-                _onNotOnHubPackagesFoundTrigger = AddTrigger("On 'Not On Hub' Packages Found", "On 'not on Hub' packages found...");
+                _ifDownloadFailedTrigger = AddTrigger("If Download Failed", "If download failed...");
+                _ifNotOnHubPackagesFoundTrigger = AddTrigger("If 'Not On Hub' Packages Found", "If 'not on Hub' packages found...");
 
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
                 _uiTexts.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UIText"));
@@ -250,9 +254,9 @@ namespace everlaster
 
         void CreateUI()
         {
-            UITransform.Find("Scroll View").GetComponent<ScrollRect>().vertical = false;
+            _scrollView.GetComponent<ScrollRect>().vertical = false;
             var layout = leftUIContent.GetComponent<VerticalLayoutGroup>();
-            layout.spacing = 0.5f;
+            layout.spacing = 0.4f;
 
             CreateHeader("1. Identify Dependencies");
             CreateToggle(_searchSubDependenciesBool);
@@ -265,9 +269,10 @@ namespace everlaster
             }
 
             CreateSpacer().height = 12;
-            CreateTriggerMenuButton(_onDownloadPendingTrigger);
-            CreateTriggerMenuButton(_onDisabledPackagesFoundTrigger);
-            CreateTriggerMenuButton(_onAllDependenciesInstalledTrigger);
+            CreateTriggerMenuButton(_ifDownloadPendingTrigger);
+            CreateTriggerMenuButton(_ifDisabledPackagesFoundTrigger);
+            CreateTriggerMenuButton(_ifAllDependenciesInstalledTrigger);
+            CreateTriggerMenuButton(_ifVamBundledPackagesMissingTrigger);
             CreateTriggerMenuButton(_ifVamNotLatestTrigger);
 
             CreateSpacer().height = 6;
@@ -290,8 +295,8 @@ namespace everlaster
             }
 
             CreateSpacer().height = 12;
-            CreateTriggerMenuButton(_onDownloadFailedTrigger);
-            CreateTriggerMenuButton(_onNotOnHubPackagesFoundTrigger);
+            CreateTriggerMenuButton(_ifDownloadFailedTrigger);
+            CreateTriggerMenuButton(_ifNotOnHubPackagesFoundTrigger);
             CreateSpacer().height = 12;
             CreateToggle(logErrorsBool);
 
@@ -415,6 +420,7 @@ namespace everlaster
             _packages.Clear();
             _disabledPackages.Clear();
             _versionErrorPackages.Clear();
+            _missingVamBundledPackageNames.Clear();
             _missingPackages.Clear();
             _updateRequiredPackages.Clear();
             _installedPackages.Clear();
@@ -485,23 +491,23 @@ namespace everlaster
             {
                 if(!_uiListener.active)
                 {
-                    logBuilder.Error("Version errors in meta.json, see plugin UI. (Keybindings: AutoGetDependencies.OpenUI)");
+                    logBuilder.Error($"Version errors in meta.json, see plugin UI on atom {containingAtom.uid} (Keybindings: AutoGetDependencies.OpenUI)");
                 }
             }
 
             if(_disabledPackages.Count > 0)
             {
-                _onDisabledPackagesFoundTrigger.Trigger();
-                if(_onDisabledPackagesFoundTrigger.sendToText != null)
+                _ifDisabledPackagesFoundTrigger.Trigger();
+                if(_ifDisabledPackagesFoundTrigger.sendToText != null)
                 {
-                    _onDisabledPackagesFoundTrigger.sendToText.text = _disabledPackages.Select(obj => obj.name).ToPrettyString();
+                    _ifDisabledPackagesFoundTrigger.sendToText.text = _disabledPackages.Select(obj => obj.name).ToPrettyString();
                 }
             }
 
             if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
             {
-                _onDownloadPendingTrigger.Trigger();
-                if(_onDownloadPendingTrigger.sendToText != null)
+                _ifDownloadPendingTrigger.Trigger();
+                if(_ifDownloadPendingTrigger.sendToText != null)
                 {
                     var sb = new StringBuilder();
                     sb.Append("Missing, download required:\n\n");
@@ -523,7 +529,7 @@ namespace everlaster
 
                     sb.Append("Installed, no update required:\n\n");
                     _installedPackages.Select(obj => obj.name).ToPrettyString(sb);
-                    _onDownloadPendingTrigger.sendToText.text = sb.ToString();
+                    _ifDownloadPendingTrigger.sendToText.text = sb.ToString();
                 }
 
                 _pending = true;
@@ -533,10 +539,10 @@ namespace everlaster
             {
                 if(_versionErrorPackages.Count == 0)
                 {
-                    _onAllDependenciesInstalledTrigger.Trigger();
-                    if(_onAllDependenciesInstalledTrigger.sendToText != null)
+                    _ifAllDependenciesInstalledTrigger.Trigger();
+                    if(_ifAllDependenciesInstalledTrigger.sendToText != null)
                     {
-                        _onAllDependenciesInstalledTrigger.sendToText.text = "All dependencies are installed!";
+                        _ifAllDependenciesInstalledTrigger.sendToText.text = "All dependencies are installed!";
                     }
                 }
 
@@ -572,7 +578,11 @@ namespace everlaster
                     continue;
                 }
 
-                if(!_packages.Exists(obj => obj.name == trimmed))
+                if(_vamBundledPackageNames.Contains(trimmed))
+                {
+                    _missingVamBundledPackageNames.Add(trimmed);
+                }
+                else if(!_packages.Exists(obj => obj.name == trimmed))
                 {
                     _packages.Add(new PackageObj(trimmed, parts, depth > 0));
                 }
@@ -684,14 +694,7 @@ namespace everlaster
             _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
             var sb = new StringBuilder();
 
-            if(_versionErrorPackages.Count > 0)
-            {
-                AppendPackagesInfo(sb, "Version error in meta.json", _errorColor, _versionErrorPackages);
-            }
-            if(_disabledPackages.Count > 0)
-            {
-                AppendPackagesInfo(sb, "Disabled", _errorColor, _disabledPackages);
-            }
+            AppendShared(sb);
             AppendPackagesInfo(sb, "Missing, download required", _errorColor, _missingPackages);
             AppendPackagesInfo(sb, "Installed, check for update required", _updateRequiredColor, _updateRequiredPackages);
             AppendPackagesInfo(sb, "Installed, no update required", _okColor, _installedPackages);
@@ -699,7 +702,7 @@ namespace everlaster
             SetJssText(_infoString, sb);
         }
 
-        void AppendPackagesInfo(StringBuilder sb, string title, string titleColor, List<PackageObj> packages)
+        static void AppendPackagesInfo(StringBuilder sb, string title, string titleColor, List<PackageObj> packages)
         {
             sb.AppendFormat("<size=30><color=#{0}><b>{1}:</b></color></size>\n\n", titleColor, title);
             if(packages.Count == 0)
@@ -738,14 +741,7 @@ namespace everlaster
             }
             else
             {
-                if(_versionErrorPackages.Count > 0)
-                {
-                    AppendPackagesInfo(sb, "Version error in meta.json", _errorColor, _versionErrorPackages);
-                }
-                if(_disabledPackages.Count > 0)
-                {
-                    AppendPackagesInfo(sb, "Disabled", _errorColor, _disabledPackages);
-                }
+                AppendShared(sb);
                 if(_notOnHubPackages.Count > 0)
                 {
                     AppendPackagesInfo(sb, "Packages not on Hub", _errorColor, _notOnHubPackages);
@@ -760,6 +756,28 @@ namespace everlaster
             }
 
             SetJssText(_infoString, sb);
+        }
+
+        void AppendShared(StringBuilder sb)
+        {
+            if(!_isLatestVam && _ifVamNotLatestTrigger.eventTrigger.HasActions())
+            {
+                sb.Append("VAM is not in the latest version (>= v1.22).\n\n");
+            }
+            if(_missingVamBundledPackageNames.Count > 0)
+            {
+                sb.AppendFormat("<size=30><color=#{0}><b>Missing VAM bundled packages:</b></color></size>\n\n", _errorColor);
+                _missingVamBundledPackageNames.ToPrettyString(sb);
+                sb.Append("\n\n");
+            }
+            if(_versionErrorPackages.Count > 0)
+            {
+                AppendPackagesInfo(sb, "Version error in meta.json", _errorColor, _versionErrorPackages);
+            }
+            if(_disabledPackages.Count > 0)
+            {
+                AppendPackagesInfo(sb, "Disabled", _errorColor, _disabledPackages);
+            }
         }
 
         void SetJssText(JSONStorableString jss, StringBuilder sb)
@@ -1521,10 +1539,10 @@ namespace everlaster
             // success path; suppresses error triggers and not on Hub packages triggers if all packages happen to somehow exist regardless
             if(_packages.TrueForAll(obj => obj.existsAndIsValid))
             {
-                _onAllDependenciesInstalledTrigger.Trigger();
-                if(_onAllDependenciesInstalledTrigger.sendToText != null)
+                _ifAllDependenciesInstalledTrigger.Trigger();
+                if(_ifAllDependenciesInstalledTrigger.sendToText != null)
                 {
-                    _onAllDependenciesInstalledTrigger.sendToText.text = "All dependencies are installed!";
+                    _ifAllDependenciesInstalledTrigger.sendToText.text = "All dependencies are installed!";
                 }
             }
             // failure path
@@ -1532,17 +1550,17 @@ namespace everlaster
             {
                 if(_notOnHubPackages.Count > 0)
                 {
-                    _onNotOnHubPackagesFoundTrigger.Trigger();
-                    if(_onNotOnHubPackagesFoundTrigger.sendToText != null)
+                    _ifNotOnHubPackagesFoundTrigger.Trigger();
+                    if(_ifNotOnHubPackagesFoundTrigger.sendToText != null)
                     {
-                        _onNotOnHubPackagesFoundTrigger.sendToText.text = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
+                        _ifNotOnHubPackagesFoundTrigger.sendToText.text = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
                     }
                 }
 
-                _onDownloadFailedTrigger.Trigger();
-                if(_onDownloadFailedTrigger.sendToText != null)
+                _ifDownloadFailedTrigger.Trigger();
+                if(_ifDownloadFailedTrigger.sendToText != null)
                 {
-                    _onDownloadFailedTrigger.sendToText.text = _downloadErrorsSb.ToString();
+                    _ifDownloadFailedTrigger.sendToText.text = _downloadErrorsSb.ToString();
                 }
             }
 
@@ -1673,5 +1691,23 @@ namespace everlaster
                 SuperController.LogError("AutoGetDependencies.OnDestroy: " + e);
             }
         }
+
+        readonly HashSet<string> _vamBundledPackageNames = new HashSet<string>
+        {
+            "DJ.TanLines.1",
+            "DJ.TanLines.2",
+            "Jackaroo.SmartSuitJaR.1",
+            "JayC_Re-animator.Hair_Curly_Bob.1",
+            "MeshedVR.3PointLightSetup.1",
+            "MeshedVR.AssetsPack.1",
+            "MeshedVR.BonusScenes.9",
+            "MeshedVR.DemoScenes.2",
+            "MeshedVR.OlderContent.1",
+            "MeshedVR.PresetsPack.2",
+            "NoOC.Clothing_SailorLingerie.2",
+            "NoStage3.Hair_Long_Upswept_Top_Bun.1",
+            "Vince.Clothing_PleatedSkirtV2T.2",
+            "Xstatic.MegaParticlePack.1",
+        };
     }
 }
