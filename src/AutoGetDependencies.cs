@@ -557,7 +557,7 @@ namespace everlaster
             }
             else
             {
-                if(_versionErrorPackages.Count == 0)
+                if(_versionErrorPackages.Count == 0 && _disabledPackages.Count == 0 && _missingVamBundledPackageNames.Count == 0)
                 {
                     _ifAllDependenciesInstalledTrigger.Trigger();
                     if(_ifAllDependenciesInstalledTrigger.sendToText != null)
