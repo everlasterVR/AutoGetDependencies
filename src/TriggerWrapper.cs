@@ -111,6 +111,7 @@ namespace everlaster
         void RestoreUIText()
         {
             sendToText.alignment = _storeTextAlignment;
+            sendToText.text = "";
             var rectT = sendToText.rectTransform;
             rectT.anchoredPosition = _storeTextPos;
             rectT.sizeDelta = _storeTextSize;

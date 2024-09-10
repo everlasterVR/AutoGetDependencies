@@ -533,6 +533,13 @@ namespace everlaster
                         sb.Append("None.\n");
                     }
 
+                    if(_missingVamBundledPackageNames.Count > 0)
+                    {
+                        sb.AppendFormat("Missing VAM bundled packages:\n\n");
+                        _missingVamBundledPackageNames.ToPrettyString(sb);
+                        sb.Append("\n");
+                    }
+
                     if(_updateRequiredPackages.Count > 0)
                     {
                         sb.Append("\nInstalled, check for update required:\n\n");
