@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using UnityEngine;
@@ -25,6 +27,76 @@ namespace everlaster
             }
 
             return sb;
+        }
+    }
+
+    static class MVRScriptExtensions
+    {
+        public static void SelectPluginUI(this MVRScript script, Action postAction = null) =>
+            script.StartCoroutine(SelectPluginUICo(script, postAction));
+
+        static IEnumerator SelectPluginUICo(MVRScript script, Action postAction = null)
+        {
+            if(script.UITransform != null && script.UITransform.gameObject.activeInHierarchy)
+            {
+                if(script.enabled) postAction?.Invoke();
+                yield break;
+            }
+
+            yield return SelectAtomTabCo(script.containingAtom, "Plugins");
+
+            float timeout = Time.unscaledTime + 1;
+            while(Time.unscaledTime < timeout)
+            {
+                yield return null;
+
+                if(script.UITransform == null)
+                {
+                    continue;
+                }
+
+                /* Close any currently open plugin UI before opening this plugin's UI */
+                foreach(Transform scriptController in script.manager.pluginContainer)
+                {
+                    var mvrScript = scriptController.gameObject.GetComponent<MVRScript>();
+                    if(mvrScript != script && mvrScript != null && mvrScript.UITransform != null)
+                    {
+                        mvrScript.UITransform.gameObject.SetActive(false);
+                    }
+                }
+
+                if(script.enabled)
+                {
+                    script.UITransform.gameObject.SetActive(true);
+                    postAction?.Invoke();
+                    yield break;
+                }
+            }
+        }
+
+        static IEnumerator SelectAtomTabCo(Atom atom, string tabName, Action postAction = null)
+        {
+            if(SuperController.singleton.gameMode != SuperController.GameMode.Edit)
+            {
+                SuperController.singleton.gameMode = SuperController.GameMode.Edit;
+            }
+
+            SuperController.singleton.SelectController(atom.mainController, false, false);
+            SuperController.singleton.ShowMainHUDAuto();
+
+            float timeout = Time.unscaledTime + 1;
+            while(Time.unscaledTime < timeout)
+            {
+                yield return null;
+                var selector = atom.gameObject.GetComponentInChildren<UITabSelector>();
+                if(selector)
+                {
+                    selector.SetActiveTab(tabName);
+                    yield return null;
+                    postAction?.Invoke();
+                    break;
+                }
+            }
         }
     }
 

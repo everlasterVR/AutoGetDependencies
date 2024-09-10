@@ -92,6 +92,7 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="src\AutoGetDependencies.cs" />
+        <Compile Include="src\Bindings.cs" />
         <Compile Include="src\Extensions.cs" />
         <Compile Include="src\MacGruber\MacGruber_Utils.cs" />
         <Compile Include="src\PackageObj.cs" />

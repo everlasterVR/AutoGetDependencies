@@ -18,6 +18,7 @@ namespace everlaster
         UnityEventsListener _uiListener;
         bool _uiCreated;
         public LogBuilder logBuilder { get; private set; }
+        Bindings _bindings;
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
         readonly string _errorColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0, 0));
@@ -57,7 +58,7 @@ namespace everlaster
         JSONStorableAction _copyErrorsToClipboardAction;
         JSONStorableAction _copyNotOnHubToClipboardAction;
         JSONStorableAction _copyDisabledToClipboardAction;
-        // JSONStorableAction _navigateToPluginUIAction; // TODO
+        JSONStorableAction _navigateToPluginUIAction;
         // TODO special handling for included in VAM packages
 
         readonly Dictionary<string, TriggerWrapper> _triggers = new Dictionary<string, TriggerWrapper>();
@@ -203,6 +204,9 @@ namespace everlaster
                 _copyDisabledToClipboardAction = new JSONStorableAction("Copy disabled names to clipboard", () => CopyToClipboard(_disabledPackages));
                 RegisterAction(_copyDisabledToClipboardAction);
 
+                _navigateToPluginUIAction = new JSONStorableAction("Open UI", () => this.SelectPluginUI());
+                RegisterAction(_navigateToPluginUIAction);
+
                 SimpleTriggerHandler.LoadAssets();
                 _onDownloadPendingTrigger = AddTrigger("On Download Pending", "On download pending...");
                 _onDisabledPackagesFoundTrigger = AddTrigger("On Disabled Packages Found", "On disabled packages found...");
@@ -218,6 +222,9 @@ namespace everlaster
                 SuperController.singleton.onAtomUIDRenameHandlers += OnAtomRenamed;
                 RebuildUISliderOptions();
                 RebuildUITextOptions();
+
+                SuperController.singleton.BroadcastMessage("OnActionsProviderAvailable", this, SendMessageOptions.DontRequireReceiver);
+                RegisterBindings();
 
                 _initialized = true;
             }
@@ -467,11 +474,16 @@ namespace everlaster
                 _updateRequiredPackages.Reverse();
             }
 
+            if(!isLatestVam)
+            {
+                _ifVamNotLatestTrigger.Trigger();
+            }
+
             if(_versionErrorPackages.Count > 0)
             {
                 if(!_uiListener.active)
                 {
-                    logBuilder.Error("Version error in meta.json, see plugin UI");
+                    logBuilder.Error("Version errors in meta.json, see plugin UI. (Keybindings: AutoGetDependencies.OpenUI)");
                 }
             }
 
@@ -864,6 +876,33 @@ namespace everlaster
                     chooser.displayChoices = displayOptions;
                 }
             }
+        }
+
+        void RegisterBindings()
+        {
+            if(_bindings != null)
+            {
+                return;
+            }
+
+            _bindings = new Bindings(nameof(AutoGetDependencies), new List<JSONStorableAction>
+            {
+                new JSONStorableAction("FindDependencies", FindDependenciesCallback),
+                new JSONStorableAction("DownloadMissing", DownloadMissingCallback),
+                new JSONStorableAction("ForceFinish", ForceFinishCallback),
+                new JSONStorableAction("CopyErrorsToClipboard", CopyErrorsToClipboardCallback),
+                new JSONStorableAction("CopyNotOnHubToClipboard", () => CopyToClipboard(_notOnHubPackages)),
+                new JSONStorableAction("CopyDisabledToClipboard", () => CopyToClipboard(_disabledPackages)),
+                new JSONStorableAction("OpenUI", () => this.SelectPluginUI()),
+            });
+        }
+
+        // https://github.com/vam-community/vam-plugins-interop-specs/blob/main/keybindings.md
+        public void OnBindingsListRequested(List<object> bindingsList)
+        {
+            RegisterBindings();
+            bindingsList.Add(_bindings.namespaceDict);
+            bindingsList.AddRange(_bindings.GetActions());
         }
 
         float _tmpAlpha;
@@ -1615,6 +1654,7 @@ namespace everlaster
                 SuperController.singleton.onAtomAddedHandlers -= OnAtomAdded;
                 SuperController.singleton.onAtomRemovedHandlers -= OnAtomRemoved;
                 SuperController.singleton.onAtomUIDRenameHandlers -= OnAtomRenamed;
+                SuperController.singleton.BroadcastMessage("OnActionsProviderDestroyed", this, SendMessageOptions.DontRequireReceiver);
 
                 if(_downloadCo != null)
                 {
