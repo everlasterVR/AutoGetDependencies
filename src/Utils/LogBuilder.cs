@@ -33,13 +33,6 @@ namespace everlaster
             LogException();
         }
 
-        public void Message(string format, params object[] args)
-        {
-            Clear();
-            _sb.AppendFormat(format, args);
-            LogMessage();
-        }
-
         public void Message(string message)
         {
             Clear();

@@ -2,6 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace everlaster
@@ -12,13 +13,18 @@ namespace everlaster
         public static string ToPrettyString<T>(this IEnumerable<T> enumerable, string separator = "\n")
         {
             var sb = new StringBuilder();
+            return enumerable.ToPrettyString(sb, separator).ToString();
+        }
+
+        public static StringBuilder ToPrettyString<T>(this IEnumerable<T> enumerable, StringBuilder sb, string separator = "\n")
+        {
             foreach(var item in enumerable)
             {
                 sb.Append(item);
                 sb.Append(separator);
             }
 
-            return sb.ToString();
+            return sb;
         }
     }
 
@@ -28,6 +34,14 @@ namespace everlaster
         {
             sb.Length = 0;
             return sb;
+        }
+    }
+
+    static class UIDynamicButtonExtensions
+    {
+        public static void AddListener(this UIDynamicButton uiDynamic, UnityAction action)
+        {
+            uiDynamic.button.onClick.AddListener(action);
         }
     }
 

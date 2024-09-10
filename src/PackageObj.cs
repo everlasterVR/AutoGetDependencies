@@ -3,7 +3,7 @@ using MVR.Hub;
 
 namespace everlaster
 {
-    public class PackageObj
+    sealed class PackageObj
     {
         public readonly string name;
         public readonly string groupName;
