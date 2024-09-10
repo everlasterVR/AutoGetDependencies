@@ -415,7 +415,9 @@ namespace everlaster
             _finished = false;
             _downloadErrorsSb.Clear();
             SetProgress(0);
+            _infoString.val = "Rescanning packages";
             SuperController.singleton.RescanPackages();
+            _infoString.val = "";
 
             _packages.Clear();
             _disabledPackages.Clear();
@@ -431,7 +433,9 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                logBuilder.Exception("Finding packages failed", e);
+                _infoString.val = "Error identifying dependencies!";
+                logBuilder.Exception("Error identifying dependencies", e);
+                return;
             }
 
             if(_identifyDisabledPackagesBool.val)
@@ -1667,7 +1671,7 @@ namespace everlaster
             {
                 foreach(var pair in _triggers)
                 {
-                    pair.Value.eventTrigger.OnRemove();
+                    pair.Value.Destroy();
                 }
 
                 if(_progressSlider != null)

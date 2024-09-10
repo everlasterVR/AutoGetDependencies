@@ -14,6 +14,9 @@ namespace everlaster
         public readonly EventTrigger eventTrigger;
         public readonly string label;
 
+        TextAnchor _storeTextAlignment;
+        Vector2 _storeTextPos;
+        Vector2 _storeTextSize;
         UIDynamicButton _button;
         Color _defaultButtonColor;
         Coroutine _flashButtonCo;
@@ -61,6 +64,10 @@ namespace everlaster
             try
             {
                 sendToAtom = null;
+                if(sendToText != null)
+                {
+                    RestoreUIText();
+                }
                 sendToText = null;
 
                 if (!string.IsNullOrEmpty(option))
@@ -74,6 +81,7 @@ namespace everlaster
                     }
 
                     sendToText = uiTextObj.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder/Text").GetComponent<Text>();
+                    ConfigureUIText();
                     sendToAtom = uiTextObj;
                 }
             }
@@ -81,6 +89,31 @@ namespace everlaster
             {
                 _script.logBuilder.Exception(e);
             }
+        }
+
+        void ConfigureUIText()
+        {
+            _storeTextAlignment = sendToText.alignment;
+            sendToText.alignment = TextAnchor.UpperLeft;
+            var rectT = sendToText.rectTransform;
+            var pos = rectT.anchoredPosition;
+            var size = rectT.sizeDelta;
+            _storeTextPos = pos;
+            _storeTextSize = size;
+            pos.x += 10;
+            pos.y -= 10;
+            size.x -= 20;
+            size.y -= 20;
+            rectT.anchoredPosition = pos;
+            rectT.sizeDelta = size;
+        }
+
+        void RestoreUIText()
+        {
+            sendToText.alignment = _storeTextAlignment;
+            var rectT = sendToText.rectTransform;
+            rectT.anchoredPosition = _storeTextPos;
+            rectT.sizeDelta = _storeTextSize;
         }
 
         public void Trigger()
@@ -183,6 +216,15 @@ namespace everlaster
             catch(Exception e)
             {
                 _script.logBuilder.Exception(e);
+            }
+        }
+
+        public void Destroy()
+        {
+            eventTrigger.OnRemove();
+            if(sendToText != null)
+            {
+                RestoreUIText();
             }
         }
     }
