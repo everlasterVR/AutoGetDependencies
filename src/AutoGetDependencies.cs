@@ -504,6 +504,15 @@ namespace everlaster
                 }
             }
 
+            if(_missingVamBundledPackageNames.Count > 0)
+            {
+                _ifVamBundledPackagesMissingTrigger.Trigger();
+                if(_ifVamBundledPackagesMissingTrigger.sendToText != null)
+                {
+                    _ifVamBundledPackagesMissingTrigger.sendToText.text = _missingVamBundledPackageNames.ToPrettyString();
+                }
+            }
+
             if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
             {
                 _ifDownloadPendingTrigger.Trigger();
@@ -578,7 +587,7 @@ namespace everlaster
                     continue;
                 }
 
-                if(_vamBundledPackageNames.Contains(trimmed))
+                if(_vamBundledPackageNames.Contains($"{parts[0]}.{parts[1]}"))
                 {
                     _missingVamBundledPackageNames.Add(trimmed);
                 }
@@ -768,7 +777,7 @@ namespace everlaster
             {
                 sb.AppendFormat("<size=30><color=#{0}><b>Missing VAM bundled packages:</b></color></size>\n\n", _errorColor);
                 _missingVamBundledPackageNames.ToPrettyString(sb);
-                sb.Append("\n\n");
+                sb.Append("\n");
             }
             if(_versionErrorPackages.Count > 0)
             {
@@ -1694,20 +1703,19 @@ namespace everlaster
 
         readonly HashSet<string> _vamBundledPackageNames = new HashSet<string>
         {
-            "DJ.TanLines.1",
-            "DJ.TanLines.2",
-            "Jackaroo.SmartSuitJaR.1",
-            "JayC_Re-animator.Hair_Curly_Bob.1",
-            "MeshedVR.3PointLightSetup.1",
-            "MeshedVR.AssetsPack.1",
-            "MeshedVR.BonusScenes.9",
-            "MeshedVR.DemoScenes.2",
-            "MeshedVR.OlderContent.1",
-            "MeshedVR.PresetsPack.2",
-            "NoOC.Clothing_SailorLingerie.2",
-            "NoStage3.Hair_Long_Upswept_Top_Bun.1",
-            "Vince.Clothing_PleatedSkirtV2T.2",
-            "Xstatic.MegaParticlePack.1",
+            "DJ.TanLines",
+            "Jackaroo.SmartSuitJaR",
+            "JayC_Re-animator.Hair_Curly_Bob",
+            "MeshedVR.3PointLightSetup",
+            "MeshedVR.AssetsPack",
+            "MeshedVR.BonusScenes",
+            "MeshedVR.DemoScenes",
+            "MeshedVR.OlderContent",
+            "MeshedVR.PresetsPack",
+            "NoOC.Clothing_SailorLingerie",
+            "NoStage3.Hair_Long_Upswept_Top_Bun",
+            "Vince.Clothing_PleatedSkirtV2T",
+            "Xstatic.MegaParticlePack",
         };
     }
 }
