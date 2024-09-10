@@ -64,12 +64,12 @@ namespace everlaster
 
         readonly Dictionary<string, TriggerWrapper> _triggers = new Dictionary<string, TriggerWrapper>();
         TriggerWrapper _ifDownloadPendingTrigger;
-        TriggerWrapper _ifDisabledPackagesFoundTrigger;
+        TriggerWrapper _ifDisabledPackagesDetectedTrigger;
         TriggerWrapper _ifAllDependenciesInstalledTrigger;
         TriggerWrapper _ifVamBundledPackagesMissingTrigger;
         TriggerWrapper _ifVamNotLatestTrigger;
-        TriggerWrapper _ifDownloadFailedTrigger;
-        TriggerWrapper _ifNotOnHubPackagesFoundTrigger;
+        TriggerWrapper _ifSomePackagesNotInstalledTrigger;
+        TriggerWrapper _ifNotOnHubPackagesDetectedTrigger;
 
         bool _isLatestVam;
         Atom _progressUIAtom;
@@ -214,12 +214,12 @@ namespace everlaster
 
                 SimpleTriggerHandler.LoadAssets();
                 _ifDownloadPendingTrigger = AddTrigger("If Download Pending", "If download pending...");
-                _ifDisabledPackagesFoundTrigger = AddTrigger("If Disabled Packages Found", "If disabled packages found...");
+                _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected", "If disabled packages detected...");
                 _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed", "If all dependencies installed...");
                 _ifVamBundledPackagesMissingTrigger = AddTrigger("If VAM Bundled Packages Missing", "If VAM bundled packages missing...");
                 _ifVamNotLatestTrigger = AddTrigger("If VAM Not Latest", "If VAM not latest (>= v1.22)...", false);
-                _ifDownloadFailedTrigger = AddTrigger("If Download Failed", "If download failed...");
-                _ifNotOnHubPackagesFoundTrigger = AddTrigger("If 'Not On Hub' Packages Found", "If 'not on Hub' packages found...");
+                _ifSomePackagesNotInstalledTrigger = AddTrigger("If Some Packages Not Installed", "If some packages not installed...");
+                _ifNotOnHubPackagesDetectedTrigger = AddTrigger("If 'Not On Hub' Packages Detected", "If 'not on Hub' packages detected...");
 
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
                 _uiTexts.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UIText"));
@@ -270,7 +270,7 @@ namespace everlaster
 
             CreateSpacer().height = 12;
             CreateTriggerMenuButton(_ifDownloadPendingTrigger);
-            CreateTriggerMenuButton(_ifDisabledPackagesFoundTrigger);
+            CreateTriggerMenuButton(_ifDisabledPackagesDetectedTrigger);
             CreateTriggerMenuButton(_ifAllDependenciesInstalledTrigger);
             CreateTriggerMenuButton(_ifVamBundledPackagesMissingTrigger);
             CreateTriggerMenuButton(_ifVamNotLatestTrigger);
@@ -295,8 +295,8 @@ namespace everlaster
             }
 
             CreateSpacer().height = 12;
-            CreateTriggerMenuButton(_ifDownloadFailedTrigger);
-            CreateTriggerMenuButton(_ifNotOnHubPackagesFoundTrigger);
+            CreateTriggerMenuButton(_ifSomePackagesNotInstalledTrigger);
+            CreateTriggerMenuButton(_ifNotOnHubPackagesDetectedTrigger);
             CreateSpacer().height = 12;
             CreateToggle(logErrorsBool);
 
@@ -501,10 +501,10 @@ namespace everlaster
 
             if(_disabledPackages.Count > 0)
             {
-                _ifDisabledPackagesFoundTrigger.Trigger();
-                if(_ifDisabledPackagesFoundTrigger.sendToText != null)
+                _ifDisabledPackagesDetectedTrigger.Trigger();
+                if(_ifDisabledPackagesDetectedTrigger.sendToText != null)
                 {
-                    _ifDisabledPackagesFoundTrigger.sendToText.text = _disabledPackages.Select(obj => obj.name).ToPrettyString();
+                    _ifDisabledPackagesDetectedTrigger.sendToText.text = _disabledPackages.Select(obj => obj.name).ToPrettyString();
                 }
             }
 
@@ -1570,17 +1570,17 @@ namespace everlaster
             {
                 if(_notOnHubPackages.Count > 0)
                 {
-                    _ifNotOnHubPackagesFoundTrigger.Trigger();
-                    if(_ifNotOnHubPackagesFoundTrigger.sendToText != null)
+                    _ifNotOnHubPackagesDetectedTrigger.Trigger();
+                    if(_ifNotOnHubPackagesDetectedTrigger.sendToText != null)
                     {
-                        _ifNotOnHubPackagesFoundTrigger.sendToText.text = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
+                        _ifNotOnHubPackagesDetectedTrigger.sendToText.text = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
                     }
                 }
 
-                _ifDownloadFailedTrigger.Trigger();
-                if(_ifDownloadFailedTrigger.sendToText != null)
+                _ifSomePackagesNotInstalledTrigger.Trigger();
+                if(_ifSomePackagesNotInstalledTrigger.sendToText != null)
                 {
-                    _ifDownloadFailedTrigger.sendToText.text = _downloadErrorsSb.ToString();
+                    _ifSomePackagesNotInstalledTrigger.sendToText.text = _downloadErrorsSb.ToString();
                 }
             }
 
