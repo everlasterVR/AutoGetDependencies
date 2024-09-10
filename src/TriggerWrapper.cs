@@ -1,6 +1,7 @@
 ﻿using MacGruber;
 using SimpleJSON;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,7 +13,16 @@ namespace everlaster
         readonly AutoGetDependencies _script;
         public readonly EventTrigger eventTrigger;
         public readonly string label;
-        public UIDynamicButton button;
+
+        UIDynamicButton _button;
+        Color _defaultButtonColor;
+        Coroutine _flashButtonCo;
+
+        public UIDynamicButton button
+        {
+            get { return _button;}
+            set { _button = value; _defaultButtonColor = value.buttonColor; }
+        }
 
         public JSONStorableStringChooser uiTextChooser;
         public Atom sendToAtom;
@@ -79,14 +89,39 @@ namespace everlaster
             {
                 if(ValidateTrigger(eventTrigger))
                 {
-                    Debug.Log($"Triggering {eventTrigger.Name}");
                     eventTrigger.Trigger();
+                    if(button != null)
+                    {
+                        if(_flashButtonCo != null)
+                        {
+                            _script.StopCoroutine(_flashButtonCo);
+                        }
+
+                        _flashButtonCo = _script.StartCoroutine(FlashButton());
+                    }
                 }
             }
             catch(Exception e)
             {
                 _script.logBuilder.Exception(e);
             }
+        }
+
+        IEnumerator FlashButton()
+        {
+            button.buttonColor = Color.green;
+            yield return new WaitForSeconds(0.50f);
+            const float duration = 1.0f;
+            float elapsed = 0f;
+            while(elapsed < duration)
+            {
+                button.buttonColor = Color.Lerp(Color.green, _defaultButtonColor, elapsed / duration);
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            button.buttonColor = _defaultButtonColor;
+            _flashButtonCo = null;
         }
 
         bool ValidateTrigger(EventTrigger trigger)

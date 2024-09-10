@@ -43,6 +43,7 @@ namespace everlaster
 
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableBool _alwaysCheckForUpdatesBool;
+        JSONStorableBool _identifyDisabledPackagesBool;
         JSONStorableAction _findDependenciesAction;
         JSONStorableString _infoString;
         JSONStorableBool _tempEnableHubBool;
@@ -163,6 +164,9 @@ namespace everlaster
                 _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false);
                 RegisterBool(_alwaysCheckForUpdatesBool);
 
+                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", false);
+                RegisterBool(_identifyDisabledPackagesBool);
+
                 _findDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", FindDependenciesCallback);
                 RegisterAction(_findDependenciesAction);
 
@@ -244,29 +248,30 @@ namespace everlaster
             CreateHeader("1. Identify Dependencies");
             CreateToggle(_searchSubDependenciesBool);
             CreateToggle(_alwaysCheckForUpdatesBool);
+            CreateToggle(_identifyDisabledPackagesBool);
             {
                 var uiDynamic = CreateButton(_findDependenciesAction.name);
-                uiDynamic.height = 75;
+                uiDynamic.height = 80;
                 _findDependenciesAction.RegisterButton(uiDynamic);
             }
 
-            CreateSpacer().height = 10;
+            CreateSpacer().height = 12;
             CreateTriggerMenuButton(_onDownloadPendingTrigger);
             CreateTriggerMenuButton(_onDisabledPackagesFoundTrigger);
             CreateTriggerMenuButton(_onAllDependenciesInstalledTrigger);
             CreateTriggerMenuButton(_ifVamNotLatestTrigger);
 
-            CreateSpacer().height = 5;
+            CreateSpacer().height = 6;
             CreateHeader("2. Download Dependencies");
             CreateToggle(_tempEnableHubBool);
             CreateToggle(_autoAcceptPackagePluginsBool);
             {
                 var uiDynamic = CreateButton(_downloadAction.name);
-                uiDynamic.height = 75;
+                uiDynamic.height = 80;
                 _downloadAction.RegisterButton(uiDynamic);
             }
 
-            CreateSpacer().height = 5;
+            CreateSpacer().height = 12;
             ConfigurePopup(CreateScrollablePopup(_progressBarChooser), 470);
             {
                 var uiDynamic = CreateSlider(_progressFloat);
@@ -275,9 +280,10 @@ namespace everlaster
                 uiDynamic.SetInteractable(false);
             }
 
-            CreateSpacer().height = 10;
+            CreateSpacer().height = 12;
             CreateTriggerMenuButton(_onDownloadFailedTrigger);
             CreateTriggerMenuButton(_onNotOnHubPackagesFoundTrigger);
+            CreateSpacer().height = 12;
             CreateToggle(logErrorsBool);
 
             // TODO plugin usage info
@@ -312,14 +318,14 @@ namespace everlaster
         {
             var uiDynamic = CreateTextField(new JSONStorableString(Guid.NewGuid().ToString().Substring(0, 4), text));
             var layoutElement = uiDynamic.GetComponent<LayoutElement>();
-            layoutElement.minHeight = 55;
-            layoutElement.preferredHeight = 55;
+            layoutElement.minHeight = 65;
+            layoutElement.preferredHeight = 65;
             uiDynamic.UItext.fontSize = 30;
             uiDynamic.UItext.fontStyle = FontStyle.Bold;
             uiDynamic.backgroundColor = Color.clear;
             var rectT = uiDynamic.UItext.GetComponent<RectTransform>();
             var pos = rectT.anchoredPosition;
-            pos.y = -10;
+            pos.y = -15;
             rectT.anchoredPosition = pos;
         }
 
@@ -413,19 +419,22 @@ namespace everlaster
                 logBuilder.Exception("Finding packages failed", e);
             }
 
-            try
+            if(_identifyDisabledPackagesBool.val)
             {
-                var packagesDict = _packages.ToDictionary(obj => obj.name, obj => obj);
-                GC.Collect(); // TODO remove
-                float startMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
-                IdentifyDisabledPackages(packagesDict);
-                float endMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
-                logBuilder.Message($"FindDisabledPackages increased heap size by {endMemory - startMemory:0.00} MB");
-            }
-            catch(Exception e)
-            {
-                logBuilder.Exception("Identifying disabled packages failed", e);
-                _disabledPackages.Clear();
+                try
+                {
+                    var packagesDict = _packages.ToDictionary(obj => obj.name, obj => obj);
+                    GC.Collect(); // TODO remove
+                    float startMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
+                    IdentifyDisabledPackages(packagesDict);
+                    float endMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
+                    logBuilder.Message($"FindDisabledPackages increased heap size by {endMemory - startMemory:0.00} MB");
+                }
+                catch(Exception e)
+                {
+                    logBuilder.Exception("Identifying disabled packages failed", e);
+                    _disabledPackages.Clear();
+                }
             }
 
             // TODO for .latest packages, identify if the latest installed version is disabled?
@@ -477,33 +486,30 @@ namespace everlaster
 
             if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
             {
-                if(_versionErrorPackages.Count == 0)
+                _onDownloadPendingTrigger.Trigger();
+                if(_onDownloadPendingTrigger.sendToText != null)
                 {
-                    _onDownloadPendingTrigger.Trigger();
-                    if(_onDownloadPendingTrigger.sendToText != null)
+                    var sb = new StringBuilder();
+                    sb.Append("Missing, download required:\n\n");
+                    if(_missingPackages.Count > 0)
                     {
-                        var sb = new StringBuilder();
-                        sb.Append("Missing, download required:\n\n");
-                        if(_missingPackages.Count > 0)
-                        {
-                            _missingPackages.Select(obj => obj.name).ToPrettyString(sb);
-                        }
-                        else
-                        {
-                            sb.Append("None.\n");
-                        }
-
-                        if(_updateRequiredPackages.Count > 0)
-                        {
-                            sb.Append("\nInstalled, check for update required:\n\n");
-                            _updateRequiredPackages.Select(obj => obj.name).ToPrettyString(sb);
-                            sb.Append("\n");
-                        }
-
-                        sb.Append("Installed, no update required:\n\n");
-                        _installedPackages.Select(obj => obj.name).ToPrettyString(sb);
-                        _onDownloadPendingTrigger.sendToText.text = sb.ToString();
+                        _missingPackages.Select(obj => obj.name).ToPrettyString(sb);
                     }
+                    else
+                    {
+                        sb.Append("None.\n");
+                    }
+
+                    if(_updateRequiredPackages.Count > 0)
+                    {
+                        sb.Append("\nInstalled, check for update required:\n\n");
+                        _updateRequiredPackages.Select(obj => obj.name).ToPrettyString(sb);
+                        sb.Append("\n");
+                    }
+
+                    sb.Append("Installed, no update required:\n\n");
+                    _installedPackages.Select(obj => obj.name).ToPrettyString(sb);
+                    _onDownloadPendingTrigger.sendToText.text = sb.ToString();
                 }
 
                 _pending = true;
