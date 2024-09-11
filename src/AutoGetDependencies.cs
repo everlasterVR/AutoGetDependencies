@@ -843,10 +843,6 @@ namespace everlaster
                 }
             }
 
-            List<string> vammoan;
-            packageFileMap.TryGetValue("hazmhox.vammoan", out vammoan);
-            Debug.Log(vammoan == null ? "vammoan not found" : $"vammoan found: {vammoan.ToPrettyString()}");
-
             // After processing all directories and files, check the 'latest' packages
             foreach(var pair in packagesDict)
             {
