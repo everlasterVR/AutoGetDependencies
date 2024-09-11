@@ -21,6 +21,7 @@ namespace everlaster
         bool _uiCreated;
         public LogBuilder logBuilder { get; private set; }
         Bindings _bindings;
+        string _loadedScene;
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
         readonly static string _errorColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0, 0));
@@ -50,8 +51,10 @@ namespace everlaster
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableBool _alwaysCheckForUpdatesBool;
         JSONStorableBool _identifyDisabledPackagesBool;
-        JSONStorableAction _findDependenciesAction;
+        JSONStorableAction _identifyDependenciesAction;
+        JSONStorableUrl _selectPackageUrl;
         JSONStorableString _usageString;
+        JSONStorableString _pathString;
         JSONStorableString _infoString;
         UIDynamicButton _usageButton;
         UIDynamicButton _backButton;
@@ -145,12 +148,6 @@ namespace everlaster
             try
             {
                 logBuilder = new LogBuilder(nameof(AutoGetDependencies));
-                if(containingAtom.type == "SessionPluginManager")
-                {
-                    OnInitError("Do not add as Session Plugin.");
-                    return;
-                }
-
                 var coreControl = SuperController.singleton.GetAtomByUid("CoreControl");
                 _hubBrowse = (HubBrowse) coreControl.GetStorableByID("HubBrowseController");
                 if(_hubBrowse == null)
@@ -165,19 +162,37 @@ namespace everlaster
                 _isLatestVam = false;
                 #endif
 
-                _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", false);
+                _loadedScene = SuperController.singleton.LoadedSceneName;
+                _metaJson = FindLoadedSceneMetaJson();
+
+                _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", false, (bool _) => RefindDependencies());
                 RegisterBool(_searchSubDependenciesBool);
 
-                _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false);
+                _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false, (bool _) => RefindDependencies());
                 RegisterBool(_alwaysCheckForUpdatesBool);
 
-                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", true);
+                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", true, (bool _) => RefindDependencies());
                 RegisterBool(_identifyDisabledPackagesBool);
 
-                _findDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", FindDependenciesCallback);
-                RegisterAction(_findDependenciesAction);
+                if(_metaJson == null)
+                {
+                    _selectPackageUrl = new JSONStorableUrl("Identify dependencies from meta.json", "", "json", "AddonPackages")
+                    {
+                        allowFullComputerBrowse = false,
+                        allowBrowseAboveSuggestedPath = false,
+                        showDirs = true,
+                        beginBrowseWithObjectCallback = BeginLoadBrowse,
+                        endBrowseWithObjectCallback = OnMetaJsonSelected,
+                    };
+                }
+                else
+                {
+                    _identifyDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", () => FindDependenciesCallback());
+                    RegisterAction(_identifyDependenciesAction);
+                }
 
                 _usageString = new JSONStorableString("Usage", "");
+                _pathString = new JSONStorableString("Path", "");
                 _infoString = new JSONStorableString("Info", "");
 
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
@@ -242,15 +257,25 @@ namespace everlaster
             }
         }
 
-        static JSONClass FindLoadedSceneMetaJson()
+        void RefindDependencies()
         {
-            string loadedScene = SuperController.singleton.LoadedSceneName;
-            if(loadedScene == null || !loadedScene.Contains(":/"))
+            if(_metaJson == null)
+            {
+                return;
+            }
+
+            FindDependenciesCallback(false);
+        }
+
+        JSONClass FindLoadedSceneMetaJson()
+        {
+            if(_loadedScene == null || !_loadedScene.Contains(":/"))
             {
                 return null;
             }
 
-            string metaJsonPath = loadedScene.Split(':')[0] + ":/meta.json";
+            string metaJsonPath = _loadedScene.Split(':')[0] + ":/meta.json";
+            _pathString.val = metaJsonPath;
             return SuperController.singleton.LoadJSON(metaJsonPath)?.AsObject;
         }
 
@@ -264,13 +289,24 @@ namespace everlaster
             CreateToggle(_searchSubDependenciesBool);
             CreateToggle(_alwaysCheckForUpdatesBool);
             CreateToggle(_identifyDisabledPackagesBool);
+
+            if(_metaJson == null)
             {
-                var uiDynamic = CreateButton(_findDependenciesAction.name);
+                var uiDynamic = CreateButton(_selectPackageUrl.name);
                 Color color;
                 if(ColorUtility.TryParseHtmlString(FIND_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
                 uiDynamic.height = 80;
-                _findDependenciesAction.RegisterButton(uiDynamic);
+                uiDynamic.AddListener(() => _selectPackageUrl.FileBrowse());
             }
+            else
+            {
+                var uiDynamic = CreateButton(_identifyDependenciesAction.name);
+                Color color;
+                if(ColorUtility.TryParseHtmlString(FIND_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
+                uiDynamic.height = 80;
+                _identifyDependenciesAction.RegisterButton(uiDynamic);
+            }
+
 
             CreateSpacer().height = 12;
             CreateTriggerMenuButton(_ifDownloadPendingTrigger);
@@ -314,7 +350,7 @@ namespace everlaster
             {
                 const string usage = "AutoGetDependencies works in two stages:" +
                     "\n" +
-                    "\n(1) Identify dependencies from the meta.json file of the currently loaded scene's package." +
+                    "\n(1) Identify dependencies from the meta.json file." +
                     "\n(2) Download any missing dependencies." +
                     "\n" +
                     "\nUse the toggles configure the behavior of these two stages, set up triggers for different end conditions," +
@@ -328,6 +364,8 @@ namespace everlaster
                     " even if some version of each package is already installed." +
                     "\n" +
                     "\n<b>Identify disabled packages</b>\nIdentify dependencies that are disabled by scanning the AddonPackages folder." +
+                    "\n" +
+                    "\nIn the resulting dependency list, sub-dependencies are greyed out (not strictly required for the scene)." +
                     "\n" +
                     "\n<size=28>Custom Triggers</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
@@ -367,10 +405,35 @@ namespace everlaster
 
                 _usageString.val = usage;
                 _usageField = CreateInfoField(_usageString);
+                var uiTextRectT = _usageField.UItext.GetComponent<RectTransform>();
+                var uiTextPos = uiTextRectT.anchoredPosition;
+                uiTextRectT.anchoredPosition = new Vector2(uiTextPos.x, uiTextPos.y - 10);
+                var uiTextSize = uiTextRectT.sizeDelta;
+                uiTextRectT.sizeDelta = new Vector2(uiTextSize.x - 8, uiTextSize.y - 20);
             }
 
-            _infoField = CreateInfoField(_infoString);
-            _infoField.gameObject.SetActive(false);
+            {
+                _infoField = CreateInfoField(_infoString);
+                var uiTextRectT = _infoField.UItext.GetComponent<RectTransform>();
+                var uiTextPos = uiTextRectT.anchoredPosition;
+                uiTextRectT.anchoredPosition = new Vector2(uiTextPos.x, uiTextPos.y - 75);
+                var uiTextSize = uiTextRectT.sizeDelta;
+                uiTextRectT.sizeDelta = new Vector2(uiTextSize.x - 8, uiTextSize.y - 85);
+                _infoField.gameObject.SetActive(false);
+
+                var pathFieldT = Instantiate(manager.configurableTextFieldPrefab, _infoField.transform);
+                var uiDynamic = pathFieldT.GetComponent<UIDynamicTextField>();
+                uiDynamic.UItext.fontSize = 26;
+                uiDynamic.backgroundColor = Color.clear;
+                var layoutElement = pathFieldT.GetComponent<LayoutElement>();
+                DestroyImmediate(layoutElement);
+                var rectT = pathFieldT.GetComponent<RectTransform>();
+                rectT.pivot = Vector2.zero;
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 0, 75);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 0, 650);
+                _pathString.dynamicText = uiDynamic;
+                Utils.DisableScroll(uiDynamic);
+            }
         }
 
         void CreateHeader(string text)
@@ -479,11 +542,6 @@ namespace everlaster
             rectT.pivot = Vector2.zero;
             rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1210);
             rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
-            var uiTextRectT = uiDynamic.UItext.GetComponent<RectTransform>();
-            var uiTextPos = uiTextRectT.anchoredPosition;
-            uiTextRectT.anchoredPosition = new Vector2(uiTextPos.x, uiTextPos.y - 10);
-            var uiTextSize = uiTextRectT.sizeDelta;
-            uiTextRectT.sizeDelta = new Vector2(uiTextSize.x - 8, uiTextSize.y - 20);
             var scrollView = textFieldT.Find("Scroll View");
             var scrollRect = scrollView.GetComponent<ScrollRect>();
             scrollRect.horizontal = true;
@@ -518,13 +576,10 @@ namespace everlaster
             _infoField.gameObject.SetActive(true);
         }
 
-        void FindDependenciesCallback()
+        void FindDependenciesCallback(bool rescan = true)
         {
-            _metaJson = FindLoadedSceneMetaJson();
             if(_metaJson == null)
             {
-                ShowInfo();
-                _infoString.val = "Current scene is not loaded from a package.";
                 return;
             }
 
@@ -538,9 +593,13 @@ namespace everlaster
             _downloadErrorsSb.Clear();
             SetProgress(0);
             ShowInfo();
-            _infoString.val = "Rescanning packages";
-            SuperController.singleton.RescanPackages();
-            _infoString.val = "";
+
+            if(rescan)
+            {
+                _infoString.val = "Rescanning packages";
+                SuperController.singleton.RescanPackages();
+                _infoString.val = "";
+            }
 
             _packages.Clear();
             _disabledPackages.Clear();
@@ -556,7 +615,7 @@ namespace everlaster
             }
             catch(Exception e)
             {
-                _infoString.val = "Error identifying dependencies!";
+                _infoString.val = $"<color=#{_errorColor}Error identifying dependencies!</color>";
                 logBuilder.Exception("Error identifying dependencies", e);
                 return;
             }
@@ -565,12 +624,7 @@ namespace everlaster
             {
                 try
                 {
-                    var packagesDict = _packages.ToDictionary(obj => obj.name, obj => obj);
-                    GC.Collect(); // TODO remove
-                    float startMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
-                    IdentifyDisabledPackages(packagesDict);
-                    float endMemory = GC.GetTotalMemory(false) / (1024f * 1024f);
-                    logBuilder.Message($"FindDisabledPackages increased heap size by {endMemory - startMemory:0.00} MB");
+                    IdentifyDisabledPackages(_packages.ToDictionary(obj => obj.name, obj => obj));
                 }
                 catch(Exception e)
                 {
@@ -946,6 +1000,36 @@ namespace everlaster
             }
         }
 
+        // see e.g. DAZCharacterTextureControl.BeginBrowse§
+        void BeginLoadBrowse(JSONStorableUrl url)
+        {
+            url.shortCuts = FileManagerSecure.GetShortCutsForDirectory("");
+        }
+
+        void OnMetaJsonSelected(JSONStorableUrl url)
+        {
+            string path = url.val;
+            if(string.IsNullOrEmpty(path))
+            {
+                _metaJson = null;
+            }
+            else
+            {
+                _pathString.val = path;
+                if(!path.EndsWith("meta.json"))
+                {
+                    ShowInfo();
+                    _infoString.val = $"<color=#{_errorColor}>Selected file is not a meta.json file.</color>";
+                    return;
+                }
+
+                _metaJson = SuperController.singleton.LoadJSON(path)?.AsObject;
+                FindDependenciesCallback();
+            }
+
+            url.val = "";
+        }
+
         void DownloadMissingCallback()
         {
             if(!_pending)
@@ -958,7 +1042,6 @@ namespace everlaster
             ShowInfo();
             _downloadCo = StartCoroutine(DownloadMissingViaHubCo());
         }
-
 
         void OnAtomAdded(Atom atom)
         {
@@ -1055,7 +1138,7 @@ namespace everlaster
 
             _bindings = new Bindings(nameof(AutoGetDependencies), new List<JSONStorableAction>
             {
-                new JSONStorableAction("FindDependencies", FindDependenciesCallback),
+                new JSONStorableAction("FindDependencies", () => FindDependenciesCallback()),
                 new JSONStorableAction("DownloadMissing", DownloadMissingCallback),
                 new JSONStorableAction("ForceFinish", ForceFinishCallback),
                 new JSONStorableAction("CopyErrorsToClipboard", CopyErrorsToClipboardCallback),
