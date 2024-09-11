@@ -43,6 +43,7 @@ namespace everlaster
         bool _initialized;
         Coroutine _downloadCo;
         Coroutine _handleUserConfirmPanelsCo;
+        bool _metaScanned;
         bool _pending;
         bool _finished;
         readonly StringBuilder _downloadErrorsSb = new StringBuilder();
@@ -162,6 +163,10 @@ namespace everlaster
                 _isLatestVam = false;
                 #endif
 
+                _usageString = new JSONStorableString("Usage", "");
+                _pathString = new JSONStorableString("Path", "");
+                _infoString = new JSONStorableString("Info", "");
+
                 _loadedScene = SuperController.singleton.LoadedSceneName;
                 _metaJson = FindLoadedSceneMetaJson();
 
@@ -179,7 +184,7 @@ namespace everlaster
                     _selectPackageUrl = new JSONStorableUrl("Identify dependencies from meta.json", "", "json", "AddonPackages")
                     {
                         allowFullComputerBrowse = false,
-                        allowBrowseAboveSuggestedPath = false,
+                        allowBrowseAboveSuggestedPath = true,
                         showDirs = true,
                         beginBrowseWithObjectCallback = BeginLoadBrowse,
                         endBrowseWithObjectCallback = OnMetaJsonSelected,
@@ -190,10 +195,6 @@ namespace everlaster
                     _identifyDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", () => FindDependenciesCallback());
                     RegisterAction(_identifyDependenciesAction);
                 }
-
-                _usageString = new JSONStorableString("Usage", "");
-                _pathString = new JSONStorableString("Path", "");
-                _infoString = new JSONStorableString("Info", "");
 
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
                 RegisterBool(_tempEnableHubBool);
@@ -259,7 +260,7 @@ namespace everlaster
 
         void RefindDependencies()
         {
-            if(_metaJson == null)
+            if(_metaJson == null || !_metaScanned)
             {
                 return;
             }
@@ -306,7 +307,6 @@ namespace everlaster
                 uiDynamic.height = 80;
                 _identifyDependenciesAction.RegisterButton(uiDynamic);
             }
-
 
             CreateSpacer().height = 12;
             CreateTriggerMenuButton(_ifDownloadPendingTrigger);
@@ -580,6 +580,7 @@ namespace everlaster
         {
             if(_metaJson == null)
             {
+                _metaScanned = false;
                 return;
             }
 
@@ -746,6 +747,8 @@ namespace everlaster
                 _finished = true;
                 UpdateFinishedInfo();
             }
+
+            _metaScanned = true;
         }
 
         void SetProgress(float value)
@@ -996,34 +999,31 @@ namespace everlaster
             }
         }
 
-        // see e.g. DAZCharacterTextureControl.BeginBrowse§
-        void BeginLoadBrowse(JSONStorableUrl url)
-        {
-            url.shortCuts = FileManagerSecure.GetShortCutsForDirectory("");
-        }
+        static void BeginLoadBrowse(JSONStorableUrl url) => url.shortCuts = FileManagerSecure.GetShortCutsForDirectory("");
 
         void OnMetaJsonSelected(JSONStorableUrl url)
         {
+            _metaScanned = false;
+            _metaJson = null;
+
             string path = url.val;
             if(string.IsNullOrEmpty(path))
             {
-                _metaJson = null;
+                url.val = "";
+                return;
             }
-            else
+
+            _pathString.val = path;
+            if(!path.EndsWith("meta.json"))
             {
-                _pathString.val = path;
-                if(!path.EndsWith("meta.json"))
-                {
-                    ShowInfo();
-                    _infoString.val = $"<color=#{_errorColor}>Selected file is not a meta.json file.</color>";
-                    return;
-                }
-
-                _metaJson = SuperController.singleton.LoadJSON(path)?.AsObject;
-                FindDependenciesCallback();
+                ShowInfo();
+                _infoString.val = $"<color=#{_errorColor}>Selected file is not a meta.json file.</color>";
+                return;
             }
 
+            _metaJson = SuperController.singleton.LoadJSON(path)?.AsObject;
             url.val = "";
+            FindDependenciesCallback();
         }
 
         void DownloadMissingCallback()
