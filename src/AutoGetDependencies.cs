@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace everlaster
@@ -26,6 +27,8 @@ namespace everlaster
         readonly static string _updateRequiredColor = ColorUtility.ToHtmlStringRGBA(new Color(0.44f, 0.44f, 0f));
         readonly static string _okColor = ColorUtility.ToHtmlStringRGBA(new Color(0, 0.50f, 0));
         readonly static string _subDependencyColor = ColorUtility.ToHtmlStringRGBA(Color.gray);
+        const string FIND_DEPENDENCIES_COLOR = "#daf1ee";
+        const string DOWNLOAD_DEPENDENCIES_COLOR = "#ebdaf1";
         readonly static Color _paleBlue = new Color(0.71f, 0.71f, 1.00f);
         readonly List<PackageObj> _packages = new List<PackageObj>();
         readonly List<PackageObj> _disabledPackages = new List<PackageObj>();
@@ -48,7 +51,12 @@ namespace everlaster
         JSONStorableBool _alwaysCheckForUpdatesBool;
         JSONStorableBool _identifyDisabledPackagesBool;
         JSONStorableAction _findDependenciesAction;
+        JSONStorableString _usageString;
         JSONStorableString _infoString;
+        UIDynamicButton _usageButton;
+        UIDynamicButton _backButton;
+        UIDynamicTextField _usageField;
+        UIDynamicTextField _infoField;
         JSONStorableBool _tempEnableHubBool;
         JSONStorableBool _autoAcceptPackagePluginsBool;
         JSONStorableAction _downloadAction;
@@ -176,6 +184,7 @@ namespace everlaster
                 _findDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", FindDependenciesCallback);
                 RegisterAction(_findDependenciesAction);
 
+                _usageString = new JSONStorableString("Usage", "");
                 _infoString = new JSONStorableString("Info", "");
 
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
@@ -216,8 +225,8 @@ namespace everlaster
                 _ifDownloadPendingTrigger = AddTrigger("If Download Pending", "If download pending...");
                 _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected", "If disabled packages detected...");
                 _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed", "If all dependencies installed...");
-                _ifVamBundledPackagesMissingTrigger = AddTrigger("If VAM Bundled Packages Missing", "If VAM bundled packages missing...");
-                _ifVamNotLatestTrigger = AddTrigger("If VAM Not Latest", "If VAM not latest (>= v1.22)...", false);
+                _ifVamBundledPackagesMissingTrigger = AddTrigger("If VaM Bundled Packages Missing", "If VaM bundled packages missing...");
+                _ifVamNotLatestTrigger = AddTrigger("If VaM Not Latest", "If VaM not latest (>= v1.22)...", false);
                 _ifSomePackagesNotInstalledTrigger = AddTrigger("If Some Packages Not Installed", "If some packages not installed...");
                 _ifNotOnHubPackagesDetectedTrigger = AddTrigger("If 'Not On Hub' Packages Detected", "If 'not on Hub' packages detected...");
 
@@ -264,6 +273,8 @@ namespace everlaster
             CreateToggle(_identifyDisabledPackagesBool);
             {
                 var uiDynamic = CreateButton(_findDependenciesAction.name);
+                Color color;
+                if(ColorUtility.TryParseHtmlString(FIND_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
                 uiDynamic.height = 80;
                 _findDependenciesAction.RegisterButton(uiDynamic);
             }
@@ -281,6 +292,8 @@ namespace everlaster
             CreateToggle(_autoAcceptPackagePluginsBool);
             {
                 var uiDynamic = CreateButton(_downloadAction.name);
+                Color color;
+                if(ColorUtility.TryParseHtmlString(DOWNLOAD_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
                 uiDynamic.height = 80;
                 _downloadAction.RegisterButton(uiDynamic);
             }
@@ -300,32 +313,71 @@ namespace everlaster
             CreateSpacer().height = 12;
             CreateToggle(logErrorsBool);
 
-            // TODO plugin usage info
+            _usageButton = CreateTextToggleButton("Usage", ShowUsage);
+            _usageButton.gameObject.SetActive(false);
+            _backButton = CreateTextToggleButton("< Back", ShowInfo);
+            _backButton.gameObject.SetActive(false);
+
             {
-                var infoField = Instantiate(manager.configurableTextFieldPrefab, UITransform);
-                var uiDynamic = infoField.GetComponent<UIDynamicTextField>();
-                uiDynamic.UItext.fontSize = 26;
-                uiDynamic.backgroundColor = new Color(0.92f, 0.92f, 0.92f);
-                var layoutElement = infoField.GetComponent<LayoutElement>();
-                DestroyImmediate(layoutElement);
-                var rectT = infoField.GetComponent<RectTransform>();
-                rectT.pivot = Vector2.zero;
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1210);
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
-                var uiTextRectT = uiDynamic.UItext.GetComponent<RectTransform>();
-                var uiTextPos = uiTextRectT.anchoredPosition;
-                uiTextPos.y -= 10;
-                uiTextRectT.anchoredPosition = uiTextPos;
-                var uiTextSize = uiTextRectT.sizeDelta;
-                uiTextSize.y -= 10;
-                uiTextRectT.sizeDelta = uiTextSize;
-                uiDynamic.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
-                var scrollView = infoField.Find("Scroll View");
-                var scrollRect = scrollView.GetComponent<ScrollRect>();
-                scrollRect.horizontal = true;
-                scrollRect.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
-                _infoString.dynamicText = uiDynamic;
+                const string usage = "AutoGetDependencies works in two stages:" +
+                    "\n" +
+                    "\n(1) Identify dependencies from the meta.json file of the currently loaded scene's package." +
+                    "\n(2) Download any missing dependencies." +
+                    "\n" +
+                    "\nUse the toggles configure the behavior of these two stages, set up triggers for different end conditions," +
+                    " and then execute/trigger the identification and download actions in your scene logic (on scene load, via UIButton etc.)." +
+                    "\n" +
+                    "\n<size=32>1. Identify Dependencies</size>" +
+                    "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
+                    "\n<b>Search sub-dependencies</b>\nIdentify missing packages that are not direct dependencies of the scene's package." +
+                    "\n" +
+                    "\n<b>Always check for updates to '.latest'</b>\nFind dependencies with the latest version requirement and put them pending download," +
+                    " even if some version of each package is already installed." +
+                    "\n" +
+                    "\n<b>Identify disabled packages</b>\nIdentify dependencies that are disabled by scanning the AddonPackages folder." +
+                    "\n" +
+                    "\n<size=28>Custom Triggers</size>" +
+                    "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
+                    "\nConfigure actions to execute when the corresponding condition is met." +
+                    "\n" +
+                    "\n<b>If download pending...</b> executes if there are missing packages or if updates are required." +
+                    "\n" +
+                    "\n<b>If disabled packages detected...</b> executes if any dependencies are disabled. Disabled packages must be manually enabled by the user." +
+                    "\n" +
+                    "\n<b>If all dependencies installed...</b> executes either if all dependencies are already installed to begin with, or if all dependencies" +
+                    " are installed after downloading." +
+                    "\n" +
+                    "\n<b>If VaM bundled packages missing...</b> executes if any dependencies included in VAM are not found." +
+                    " These need to be manually downloaded by running VaM_Updater.exe." +
+                    "\n" +
+                    "\n<b>If VaM not latest (>= v1.22)...</b> - inform users that they should update VaM if it's required by your scene" +
+                    " (e.g. you're using VaM's built in lip sync)." +
+                    "\n" +
+                    "\nCustom triggers can additionally send information to a UIText in the scene (see Hub resource for a demo)." +
+                    "\n" +
+                    "\n<size=32>2. Download Dependencies</size>" +
+                    "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
+                    "\n<b>Temp auto-enable Hub if needed</b>\nTemporarily enable Hub for users who have it disabled." +
+                    " If unchecked, VAM prompts the user to enable Hub before the download can continue." +
+                    "\n" +
+                    "\n<b>Auto-accept plugins from packages</b>\nAutomatically accept loading of scripts from packages which contain scripts." +
+                    " If unchecked, VAM prompts the user to accept each package at the end of the download process." +
+                    "\n" +
+                    "\n<b>Progress Bar</b>\nSelect a UISlider in the scene to display download progress." +
+                    "\n" +
+                    "\n<size=28>Custom Triggers</size>" +
+                    "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
+                    "\n<b>'If some packages not installed...'</b> executes when there are still uninstalled/disabled packages after download is complete." +
+                    "\n" +
+                    "\n<b>'If 'Not on Hub' packages detected...'</b> executes if any missing dependencies couldn't be downloaded because they were not found on the Hub." +
+                    "\n";
+
+                _usageString.val = usage;
+                _usageField = CreateInfoField(_usageString);
             }
+
+            _infoField = CreateInfoField(_infoString);
+            _infoField.gameObject.SetActive(false);
         }
 
         void CreateHeader(string text)
@@ -341,6 +393,7 @@ namespace everlaster
             var pos = rectT.anchoredPosition;
             pos.y = -15;
             rectT.anchoredPosition = pos;
+            Utils.DisableScroll(uiDynamic);
         }
 
         void CreateTriggerMenuButton(TriggerWrapper trigger)
@@ -349,16 +402,16 @@ namespace everlaster
             uiDynamic.AddListener(() =>
             {
                 trigger.eventTrigger.OpenPanel();
-                if(_infoString.dynamicText != null)
+                if(_usageString.dynamicText != null)
                 {
-                    _infoString.dynamicText.gameObject.SetActive(false);
+                    _usageString.dynamicText.gameObject.SetActive(false);
                 }
             });
             trigger.RegisterOnCloseCallback(() =>
             {
-                if(_infoString.dynamicText != null)
+                if(_usageString.dynamicText != null)
                 {
-                    _infoString.dynamicText.gameObject.SetActive(true);
+                    _usageString.dynamicText.gameObject.SetActive(true);
                 }
             });
             var textComponent = uiDynamic.buttonText;
@@ -404,6 +457,74 @@ namespace everlaster
             }
         }
 
+        UIDynamicButton CreateTextToggleButton(string label, UnityAction action)
+        {
+            var buttonT = Instantiate(manager.configurableButtonPrefab, UITransform);
+            var uiDynamic = buttonT.GetComponent<UIDynamicButton>();
+            uiDynamic.label = label;
+            uiDynamic.buttonText.fontSize = 24;
+            uiDynamic.AddListener(action);
+            var rectT = buttonT.GetComponent<RectTransform>();
+            rectT.pivot = Vector2.zero;
+            rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 36);
+            rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 445, 100);
+            var textRectT = uiDynamic.buttonText.GetComponent<RectTransform>();
+            var pos = textRectT.anchoredPosition;
+            textRectT.anchoredPosition = new Vector2(pos.x, pos.y + 2);
+            return uiDynamic;
+        }
+
+        UIDynamicTextField CreateInfoField(JSONStorableString jss)
+        {
+            var textFieldT = Instantiate(manager.configurableTextFieldPrefab, UITransform);
+            var uiDynamic = textFieldT.GetComponent<UIDynamicTextField>();
+            uiDynamic.UItext.fontSize = 26;
+            uiDynamic.backgroundColor = new Color(0.92f, 0.92f, 0.92f);
+            var layoutElement = textFieldT.GetComponent<LayoutElement>();
+            DestroyImmediate(layoutElement);
+            var rectT = textFieldT.GetComponent<RectTransform>();
+            rectT.pivot = Vector2.zero;
+            rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1210);
+            rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
+            var uiTextRectT = uiDynamic.UItext.GetComponent<RectTransform>();
+            var uiTextPos = uiTextRectT.anchoredPosition;
+            uiTextRectT.anchoredPosition = new Vector2(uiTextPos.x, uiTextPos.y - 10);
+            var uiTextSize = uiTextRectT.sizeDelta;
+            uiTextRectT.sizeDelta = new Vector2(uiTextSize.x - 8, uiTextSize.y - 20);
+            var scrollView = textFieldT.Find("Scroll View");
+            var scrollRect = scrollView.GetComponent<ScrollRect>();
+            scrollRect.horizontal = true;
+            scrollRect.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+            jss.dynamicText = uiDynamic;
+            return uiDynamic;
+        }
+
+        void ShowUsage()
+        {
+            if(!_uiCreated)
+            {
+                return;
+            }
+
+            _usageButton.gameObject.SetActive(false);
+            _backButton.gameObject.SetActive(true);
+            _infoField.gameObject.SetActive(false);
+            _usageField.gameObject.SetActive(true);
+        }
+
+        void ShowInfo()
+        {
+            if(!_uiCreated)
+            {
+                return;
+            }
+
+            _usageButton.gameObject.SetActive(true);
+            _backButton.gameObject.SetActive(false);
+            _usageField.gameObject.SetActive(false);
+            _infoField.gameObject.SetActive(true);
+        }
+
         void FindDependenciesCallback()
         {
             if(_downloadCo != null)
@@ -415,6 +536,7 @@ namespace everlaster
             _finished = false;
             _downloadErrorsSb.Clear();
             SetProgress(0);
+            ShowInfo();
             _infoString.val = "Rescanning packages";
             SuperController.singleton.RescanPackages();
             _infoString.val = "";
@@ -711,6 +833,7 @@ namespace everlaster
                 return;
             }
 
+            ShowInfo();
             _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
             var sb = new StringBuilder();
 
@@ -720,6 +843,7 @@ namespace everlaster
             AppendPackagesInfo(sb, "Installed, no update required", _okColor, _installedPackages);
 
             SetJssText(_infoString, sb);
+            _usageButton.gameObject.SetActive(true);
         }
 
         static void AppendPackagesInfo(StringBuilder sb, string title, string titleColor, List<PackageObj> packages)
@@ -752,6 +876,7 @@ namespace everlaster
                 return;
             }
 
+            ShowInfo();
             _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Wrap;
             var sb = new StringBuilder();
 
@@ -766,7 +891,7 @@ namespace everlaster
                 {
                     AppendPackagesInfo(sb, "Packages not on Hub", _errorColor, _notOnHubPackages);
                 }
-                if(_downloadErrorsSb != null)
+                if(_downloadErrorsSb.Length > 0)
                 {
                     sb.AppendFormat("<size=30><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
                     sb.Append(_downloadErrorsSb);
@@ -776,6 +901,7 @@ namespace everlaster
             }
 
             SetJssText(_infoString, sb);
+            _usageButton.gameObject.SetActive(true);
         }
 
         void AppendShared(StringBuilder sb)
@@ -828,6 +954,7 @@ namespace everlaster
             }
 
             _pending = false;
+            ShowInfo();
             _downloadCo = StartCoroutine(DownloadMissingViaHubCo());
         }
 
@@ -1106,7 +1233,7 @@ namespace everlaster
 
             try
             {
-                _infoString.val = "Downloading missing packages...\n";
+                _usageString.val = "Downloading missing packages...\n";
                 if(_tempEnableHubBool.val && !_hubBrowse.HubEnabled)
                 {
                     _hubBrowse.HubEnabled = true;

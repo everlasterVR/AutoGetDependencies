@@ -100,6 +100,7 @@
         <Compile Include="src\Utils\DevUtils.cs" />
         <Compile Include="src\Utils\LogBuilder.cs" />
         <Compile Include="src\Utils\UnityEventsListener.cs" />
+        <Compile Include="src\Utils\Utils.cs" />
     </ItemGroup>
     <ItemGroup>
         <None Include=".gitignore"/>
