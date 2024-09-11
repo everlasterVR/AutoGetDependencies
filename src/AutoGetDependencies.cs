@@ -151,13 +151,6 @@ namespace everlaster
                     return;
                 }
 
-                _metaJson = FindLoadedSceneMetaJson();
-                if(_metaJson == null)
-                {
-                    OnInitError("Invalid scene (must be from package).");
-                    return;
-                }
-
                 var coreControl = SuperController.singleton.GetAtomByUid("CoreControl");
                 _hubBrowse = (HubBrowse) coreControl.GetStorableByID("HubBrowseController");
                 if(_hubBrowse == null)
@@ -252,7 +245,7 @@ namespace everlaster
         static JSONClass FindLoadedSceneMetaJson()
         {
             string loadedScene = SuperController.singleton.LoadedSceneName;
-            if(!loadedScene.Contains(":/"))
+            if(loadedScene == null || !loadedScene.Contains(":/"))
             {
                 return null;
             }
@@ -527,6 +520,14 @@ namespace everlaster
 
         void FindDependenciesCallback()
         {
+            _metaJson = FindLoadedSceneMetaJson();
+            if(_metaJson == null)
+            {
+                ShowInfo();
+                _infoString.val = "Current scene is not loaded from a package.";
+                return;
+            }
+
             if(_downloadCo != null)
             {
                 StopCoroutine(_downloadCo);
