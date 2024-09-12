@@ -175,7 +175,7 @@ namespace everlaster
                 _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", true, (bool _) => RefindDependencies());
                 RegisterBool(_identifyDisabledPackagesBool);
 
-                _selectPackageUrl = new JSONStorableUrl("Identify dependencies from meta.json", "", "json", "AddonPackages")
+                _selectPackageUrl = new JSONStorableUrl("Identify dependencies from meta json", "", "json", "AddonPackages")
                 {
                     allowFullComputerBrowse = false,
                     allowBrowseAboveSuggestedPath = true,
@@ -184,10 +184,10 @@ namespace everlaster
                     endBrowseWithObjectCallback = OnMetaJsonSelected,
                 };
 
-                _identifyDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", () => FindDependenciesCallback());
+                _identifyDependenciesAction = new JSONStorableAction("Identify dependencies from meta json", () => FindDependenciesCallback());
                 RegisterAction(_identifyDependenciesAction);
 
-                _selectMetaJsonAction = new JSONStorableAction("Select meta.json", () =>
+                _selectMetaJsonAction = new JSONStorableAction("Select meta json", () =>
                 {
                     SuperController.singleton.ShowMainHUDAuto();
                     _selectPackageUrl.FileBrowse();
@@ -281,7 +281,7 @@ namespace everlaster
             CreateToggle(_identifyDisabledPackagesBool);
 
             {
-                var uiDynamic = CreateButton(_selectMetaJsonAction.name);
+                var uiDynamic = CreateButton("Select meta.json");
                 Color color;
                 if(ColorUtility.TryParseHtmlString(FIND_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
                 uiDynamic.height = 80;
