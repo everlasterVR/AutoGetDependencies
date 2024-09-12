@@ -337,18 +337,17 @@ namespace everlaster
                     " and then execute/trigger the identification and download actions in your scene logic (on scene load, via UIButton etc.)." +
                     "\n" +
                     "\nWhen the plugin is loaded as part of a packaged scene, the scene's meta.json is selected automatically, and the actual" +
-                    " identification of dependencies can be triggered via the action 'Identify dependencies from meta.json'." +
+                    " identification of dependencies can be triggered via the action 'Identify dependencies from meta json'." +
                     "\n" +
                     "\n<size=32>1. Identify Dependencies</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
                     "\n<b>Search sub-dependencies</b>\nIdentify missing packages that are not direct dependencies of the scene's package." +
+                    " In the resulting dependency list, sub-dependencies are greyed out (not strictly required for the scene)." +
                     "\n" +
                     "\n<b>Always check for updates to '.latest'</b>\nFind dependencies with the latest version requirement and put them pending download," +
                     " even if some version of each package is already installed." +
                     "\n" +
                     "\n<b>Identify disabled packages</b>\nIdentify dependencies that are disabled by scanning the AddonPackages folder." +
-                    "\n" +
-                    "\nIn the resulting dependency list, sub-dependencies are greyed out (not strictly required for the scene)." +
                     "\n" +
                     "\n<size=28>Custom Triggers</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
@@ -367,7 +366,7 @@ namespace everlaster
                     "\n<b>If VaM not latest (>= v1.22)...</b> - inform users that they should update VaM if it's required by your scene" +
                     " (e.g. you're using VaM's built in lip sync)." +
                     "\n" +
-                    "\nCustom triggers can additionally send information to a UIText in the scene (see Hub resource for a demo)." +
+                    "\nCustom triggers can additionally send information to a UIText in the scene (see the Hub resource and the demo scene)." +
                     "\n" +
                     "\n<size=32>2. Download Dependencies</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
