@@ -113,7 +113,7 @@ namespace MacGruber
 
         void TriggerHandler.DuplicateTrigger(Trigger t)
         {
-            throw new NotImplementedException();
+            // nothing to do
         }
 
         RectTransform TriggerHandler.CreateTriggerActionsUI()

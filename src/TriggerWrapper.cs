@@ -237,7 +237,7 @@ namespace everlaster
             {
                 if(jc.HasKey(eventTrigger.Name))
                 {
-                    eventTrigger.RestoreFromJSON(jc[eventTrigger.Name].AsObject, subscenePrefix, mergeRestore);
+                    eventTrigger.RestoreFromJSON(jc[eventTrigger.Name].AsObject ?? new JSONClass(), subscenePrefix, mergeRestore);
                 }
                 else if(setMissingToDefault)
                 {
@@ -258,6 +258,17 @@ namespace everlaster
             if(_sendToText != null)
             {
                 RestoreUIText();
+            }
+        }
+
+        public void StoreJSON(JSONClass jc, string subScenePrefix)
+        {
+            if(eventTrigger.HasActions())
+            {
+                var triggerJson = eventTrigger.GetJSON(subScenePrefix);
+                triggerJson.Remove("transitionActions");
+                triggerJson.Remove("endActions");
+                jc[eventTrigger.Name] = triggerJson;
             }
         }
     }

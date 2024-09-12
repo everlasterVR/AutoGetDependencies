@@ -1793,11 +1793,13 @@ namespace everlaster
 
             try
             {
-                needsStore = true;
-                foreach(var pair in _triggers)
+                if(includePhysical || forceStore)
                 {
-                    var eventTrigger = pair.Value.eventTrigger;
-                    jc[eventTrigger.Name] = eventTrigger.GetJSON(_subScenePrefix);
+                    needsStore = _triggers.Any(pair => pair.Value.eventTrigger.HasActions()) || forceStore;
+                    foreach(var pair in _triggers)
+                    {
+                        pair.Value.StoreJSON(jc, _subScenePrefix);
+                    }
                 }
             }
             catch(Exception e)
@@ -1863,9 +1865,12 @@ namespace everlaster
         public override void LateRestoreFromJSON(JSONClass jc, bool restorePhysical = true, bool restoreAppearance = true, bool setMissingToDefault = true)
         {
             base.LateRestoreFromJSON(jc, restorePhysical, restoreAppearance, setMissingToDefault);
-            foreach(var pair in _triggers)
+            if(!physicalLocked && restorePhysical && !IsCustomPhysicalParamLocked("trigger"))
             {
-                pair.Value.RestoreFromJSON(jc, _subScenePrefix, true, setMissingToDefault);
+                foreach(var pair in _triggers)
+                {
+                    pair.Value.RestoreFromJSON(jc, _subScenePrefix, base.mergeRestore, setMissingToDefault);
+                }
             }
         }
 
