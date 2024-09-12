@@ -1,13 +1,13 @@
 {
-  "licenseType": "Questionable",
+  "licenseType": "CC BY",
   "creatorName": "everlaster",
   "packageName": "AutoGetDependencies",
   "standardReferenceVersionOption": "Latest",
   "scriptReferenceVersionOption": "Exact",
-  "description": "v0.0.0. ",
-  "credits": "",
-  "instructions": "",
-  "promotionalLink": "",
+  "description": "v0.0.0. Get a package's dependencies and identify dependency issues. Features for creators and users.",
+  "credits": "VamTimbo, DemonLord",
+  "instructions": "See plugin UI and Hub post.",
+  "promotionalLink": "https://patreon.com/everlaster",
   "programVersion": "1.22.0.3",
   "contentList": [
     "Custom/Scripts/everlaster/AutoGetDependencies/AutoGetDependencies.cslist",
