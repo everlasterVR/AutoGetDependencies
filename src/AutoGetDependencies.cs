@@ -34,7 +34,7 @@ namespace everlaster
         readonly List<PackageObj> _packages = new List<PackageObj>();
         readonly List<PackageObj> _disabledPackages = new List<PackageObj>();
         readonly List<PackageObj> _versionErrorPackages = new List<PackageObj>();
-        readonly List<string> _missingVamBundledPackageNames = new List<string>();
+        readonly List<PackageObj> _missingVamBundledPackages = new List<PackageObj>();
         readonly List<PackageObj> _missingPackages = new List<PackageObj>();
         readonly List<PackageObj> _updateRequiredPackages = new List<PackageObj>();
         readonly List<PackageObj> _installedPackages = new List<PackageObj>();
@@ -121,19 +121,19 @@ namespace everlaster
                 return;
             }
 
-            if(!_uiCreated)
+            try
             {
-                CreateUI();
-                _uiCreated = true;
-            }
+                if(!_uiCreated)
+                {
+                    CreateUI();
+                    _uiCreated = true;
+                }
 
-            if(_pending)
-            {
-                UpdatePendingInfo();
+                UpdateInfo();
             }
-            else if(_finished)
+            catch(Exception e)
             {
-                UpdateFinishedInfo();
+                logBuilder.Exception(e);
             }
         }
 
@@ -597,7 +597,7 @@ namespace everlaster
 
             if(rescan)
             {
-                _infoString.val = "Rescanning packages";
+                _infoString.val = "Rescanning packages...";
                 SuperController.singleton.RescanPackages();
                 _infoString.val = "";
             }
@@ -605,7 +605,7 @@ namespace everlaster
             _packages.Clear();
             _disabledPackages.Clear();
             _versionErrorPackages.Clear();
-            _missingVamBundledPackageNames.Clear();
+            _missingVamBundledPackages.Clear();
             _missingPackages.Clear();
             _updateRequiredPackages.Clear();
             _installedPackages.Clear();
@@ -621,133 +621,21 @@ namespace everlaster
                 return;
             }
 
-            if(_identifyDisabledPackagesBool.val)
-            {
-                try
-                {
-                    IdentifyDisabledPackages(_packages.ToDictionary(obj => obj.name, obj => obj));
-                }
-                catch(Exception e)
-                {
-                    logBuilder.Exception("Identifying disabled packages failed", e);
-                    _disabledPackages.Clear();
-                }
-            }
-
-            // TODO for .latest packages, identify if the latest installed version is disabled?
-            // - Mark as "soft disabled", i.e. optional for the user to enable
-            // - Unknown before download if Hub has a newer version
-
-            // populate lists
-            {
-                foreach(var obj in _packages)
-                {
-                    if(obj.versionError != null) _versionErrorPackages.Add(obj);
-                    else if(obj.disabled) _disabledPackages.Add(obj);
-                    else if(!obj.exists) _missingPackages.Add(obj);
-                    else _installedPackages.Add(obj);
-                }
-
-                if(_alwaysCheckForUpdatesBool.val || _missingPackages.Count > 0)
-                {
-                    for(int i = _installedPackages.Count - 1; i >= 0; i--)
-                    {
-                        var obj = _installedPackages[i];
-                        if(obj.requireLatest)
-                        {
-                            _updateRequiredPackages.Add(obj);
-                            _installedPackages.RemoveAt(i);
-                        }
-                    }
-                }
-
-                _updateRequiredPackages.Reverse();
-            }
-
             if(!_isLatestVam)
             {
                 _ifVamNotLatestTrigger.Trigger();
             }
 
-            if(_versionErrorPackages.Count > 0)
+            if(_packages.Count == 0)
             {
-                if(!_uiListener.active)
-                {
-                    logBuilder.Error($"Version errors in meta.json, see plugin UI on atom {containingAtom.uid} (Keybindings: AutoGetDependencies.OpenUI)");
-                }
-            }
-
-            if(_disabledPackages.Count > 0)
-            {
-                _ifDisabledPackagesDetectedTrigger.Trigger();
-                if(_ifDisabledPackagesDetectedTrigger.sendToText != null)
-                {
-                    _ifDisabledPackagesDetectedTrigger.sendToText.text = _disabledPackages.Select(obj => obj.name).ToPrettyString();
-                }
-            }
-
-            if(_missingVamBundledPackageNames.Count > 0)
-            {
-                _ifVamBundledPackagesMissingTrigger.Trigger();
-                if(_ifVamBundledPackagesMissingTrigger.sendToText != null)
-                {
-                    _ifVamBundledPackagesMissingTrigger.sendToText.text = _missingVamBundledPackageNames.ToPrettyString();
-                }
-            }
-
-            if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
-            {
-                _ifDownloadPendingTrigger.Trigger();
-                if(_ifDownloadPendingTrigger.sendToText != null)
-                {
-                    var sb = new StringBuilder();
-                    sb.Append("Missing, download required:\n\n");
-                    if(_missingPackages.Count > 0)
-                    {
-                        _missingPackages.Select(obj => obj.name).ToPrettyString(sb);
-                    }
-                    else
-                    {
-                        sb.Append("None.\n");
-                    }
-
-                    if(_missingVamBundledPackageNames.Count > 0)
-                    {
-                        sb.AppendFormat("Missing VAM bundled packages:\n\n");
-                        _missingVamBundledPackageNames.ToPrettyString(sb);
-                        sb.Append("\n");
-                    }
-
-                    if(_updateRequiredPackages.Count > 0)
-                    {
-                        sb.Append("\nInstalled, check for update required:\n\n");
-                        _updateRequiredPackages.Select(obj => obj.name).ToPrettyString(sb);
-                        sb.Append("\n");
-                    }
-
-                    sb.Append("Installed, no update required:\n\n");
-                    _installedPackages.Select(obj => obj.name).ToPrettyString(sb);
-                    _ifDownloadPendingTrigger.sendToText.text = sb.ToString();
-                }
-
-                _pending = true;
-                UpdatePendingInfo();
+                _finished = true;
             }
             else
             {
-                if(_versionErrorPackages.Count == 0 && _disabledPackages.Count == 0 && _missingVamBundledPackageNames.Count == 0)
-                {
-                    _ifAllDependenciesInstalledTrigger.Trigger();
-                    if(_ifAllDependenciesInstalledTrigger.sendToText != null)
-                    {
-                        _ifAllDependenciesInstalledTrigger.sendToText.text = "All dependencies are installed!";
-                    }
-                }
-
-                _finished = true;
-                UpdateFinishedInfo();
+                OnDependenciesFound();
             }
 
+            UpdateInfo();
             _metaScanned = true;
         }
 
@@ -778,19 +666,104 @@ namespace everlaster
                     continue;
                 }
 
-                if(_vamBundledPackageNames.Contains($"{parts[0]}.{parts[1]}"))
+                if(!_packages.Exists(obj => obj.name == trimmed))
                 {
-                    _missingVamBundledPackageNames.Add(trimmed);
-                }
-                else if(!_packages.Exists(obj => obj.name == trimmed))
-                {
-                    _packages.Add(new PackageObj(trimmed, parts, depth > 0));
+                    _packages.Add(new PackageObj(trimmed, parts, depth > 0, _vamBundledPackageNames));
                 }
 
                 if(recursive)
                 {
                     FindDependenciesRecursive(dependenciesJc[key].AsObject, true, depth + 1);
                 }
+            }
+        }
+
+        void OnDependenciesFound()
+        {
+            try
+            {
+                if(_identifyDisabledPackagesBool.val)
+                {
+                    try
+                    {
+                        IdentifyDisabledPackages(_packages.ToDictionary(obj => obj.name, obj => obj));
+                    }
+                    catch(Exception e)
+                    {
+                        logBuilder.Exception("Identifying disabled packages failed", e);
+                        _disabledPackages.Clear();
+                    }
+                }
+
+                // populate lists
+                {
+                    foreach(var obj in _packages)
+                    {
+                        if(obj.versionError != null) _versionErrorPackages.Add(obj);
+                        else if(obj.disabled) _disabledPackages.Add(obj);
+                        else if(!obj.exists && obj.isVamBundled) _missingVamBundledPackages.Add(obj);
+                        else if(!obj.exists) _missingPackages.Add(obj);
+                        else _installedPackages.Add(obj);
+                    }
+
+                    if(_alwaysCheckForUpdatesBool.val || _missingPackages.Count > 0)
+                    {
+                        for(int i = _installedPackages.Count - 1; i >= 0; i--)
+                        {
+                            var obj = _installedPackages[i];
+                            if(obj.requireLatest)
+                            {
+                                _updateRequiredPackages.Add(obj);
+                                _installedPackages.RemoveAt(i);
+                            }
+                        }
+                    }
+
+                    _updateRequiredPackages.Reverse();
+                }
+
+                if(_missingVamBundledPackages.Count > 0)
+                {
+                    TriggerAndSendText(_ifVamBundledPackagesMissingTrigger, _missingVamBundledPackages);
+                }
+
+                if(_versionErrorPackages.Count > 0 && !_uiListener.active)
+                {
+                    logBuilder.Error($"Version errors in meta.json, see plugin UI on atom {containingAtom.uid} (Keybindings: AutoGetDependencies.OpenUI)");
+                }
+
+                if(_disabledPackages.Count > 0)
+                {
+                    TriggerAndSendText(_ifDisabledPackagesDetectedTrigger, _disabledPackages);
+                }
+
+                if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
+                {
+                    _ifDownloadPendingTrigger.Trigger();
+                    if(_ifDownloadPendingTrigger.sendToText != null)
+                    {
+                        var sb = new StringBuilder();
+                        AppendPackagesInfoForUIText(sb, "Missing, download required:", _missingPackages);
+                        AppendPackagesInfoForUIText(sb, "Installed, check for update required:", _updateRequiredPackages);
+                        AppendPackagesInfoForUIText(sb, "Installed, no update required:", _installedPackages);
+                        _ifDownloadPendingTrigger.sendToText.text = sb.ToString();
+                    }
+
+                    _pending = true;
+                }
+                else
+                {
+                    if(_packages.TrueForAll(obj => obj.existsAndIsValid))
+                    {
+                        TriggerAndSendText(_ifAllDependenciesInstalledTrigger, _packages);
+                    }
+
+                    _finished = true;
+                }
+            }
+            catch(Exception e)
+            {
+                logBuilder.Exception(e);
             }
         }
 
@@ -880,21 +853,80 @@ namespace everlaster
             }
         }
 
-        void UpdatePendingInfo()
+        static void TriggerAndSendText(TriggerWrapper trigger, List<PackageObj> packages)
         {
-            if(!_uiCreated)
+            trigger.Trigger();
+            if(trigger.sendToText != null)
+            {
+                trigger.sendToText.text = packages.Select(obj => obj.name).ToPrettyString();
+            }
+        }
+
+        void UpdateInfo()
+        {
+            if(!_uiCreated || !(_pending || _finished))
             {
                 return;
             }
 
             ShowInfo();
-            _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
-            var sb = new StringBuilder();
+            if(_pending) _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
+            else if(_finished) _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-            AppendShared(sb);
-            AppendPackagesInfo(sb, "Missing, download required", _errorColor, _missingPackages);
-            AppendPackagesInfo(sb, "Installed, check for update required", _updateRequiredColor, _updateRequiredPackages);
-            AppendPackagesInfo(sb, "Installed, no update required", _okColor, _installedPackages);
+            var sb = new StringBuilder();
+            if(_packages.Count == 0)
+            {
+                sb.Append("Package has no dependencies.\n\n");
+            }
+            else if(_packages.TrueForAll(obj => obj.existsAndIsValid))
+            {
+                AppendPackagesInfo(sb, "All dependencies are installed!", _okColor, _packages);
+            }
+            else
+            {
+                if(!_isLatestVam && _ifVamNotLatestTrigger.eventTrigger.HasActions())
+                {
+                    sb.Append("VAM is not in the latest version (>= v1.22).\n\n");
+                }
+
+                if(_missingVamBundledPackages.Count > 0)
+                {
+                    sb.AppendFormat("<size=30><color=#{0}><b>Missing VAM bundled packages:</b></color></size>\n\n", _errorColor);
+                    _missingVamBundledPackages.ToPrettyString(sb);
+                    sb.Append("\n");
+                }
+
+                if(_versionErrorPackages.Count > 0)
+                {
+                    AppendPackagesInfo(sb, "Version error in meta.json:", _errorColor, _versionErrorPackages);
+                }
+
+                if(_disabledPackages.Count > 0)
+                {
+                    AppendPackagesInfo(sb, "Disabled:", _errorColor, _disabledPackages);
+                }
+
+                if(_pending)
+                {
+                    AppendPackagesInfo(sb, "Missing, download required:", _errorColor, _missingPackages);
+                    AppendPackagesInfo(sb, "Installed, check for update required:", _updateRequiredColor, _updateRequiredPackages);
+                    AppendPackagesInfo(sb, "Installed, no update required:", _okColor, _installedPackages);
+                }
+                else if(_finished)
+                {
+                    if(_notOnHubPackages.Count > 0)
+                    {
+                        AppendPackagesInfo(sb, "Packages not on Hub:", _errorColor, _notOnHubPackages);
+                    }
+                    if(_downloadErrorsSb.Length > 0)
+                    {
+                        sb.AppendFormat("<size=30><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
+                        sb.Append(_downloadErrorsSb);
+                        sb.Append("\n\n");
+                    }
+                    AppendPackagesInfo(sb, "Installed:", _okColor, _packages.Where(obj => obj.existsAndIsValid).ToList());
+                }
+            }
 
             SetJssText(_infoString, sb);
             _usageButton.gameObject.SetActive(true);
@@ -902,14 +934,14 @@ namespace everlaster
 
         static void AppendPackagesInfo(StringBuilder sb, string title, string titleColor, List<PackageObj> packages)
         {
-            sb.AppendFormat("<size=30><color=#{0}><b>{1}:</b></color></size>\n\n", titleColor, title);
+            sb.AppendFormat("<size=30><color=#{0}><b>{1}</b></color></size>\n\n", titleColor, title);
             if(packages.Count == 0)
             {
                 sb.Append("None.\n\n");
                 return;
             }
 
-            foreach (var obj in packages)
+            foreach(var obj in packages)
             {
                 if(obj.isSubDependency)
                 {
@@ -923,61 +955,20 @@ namespace everlaster
             sb.Append("\n");
         }
 
-        void UpdateFinishedInfo()
+        static void AppendPackagesInfoForUIText(StringBuilder sb, string title, List<PackageObj> packages)
         {
-            if(!_uiCreated)
+            sb.AppendFormat("{0}:\n\n", title);
+            if(packages.Count == 0)
             {
+                sb.Append("None.\n\n");
                 return;
             }
 
-            ShowInfo();
-            _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Wrap;
-            var sb = new StringBuilder();
-
-            if(_packages.TrueForAll(obj => obj.existsAndIsValid))
+            foreach(var obj in packages)
             {
-                sb.AppendFormat("<size=30><color=#{0}><b>All dependencies are installed!</b></color></size>\n\n", _okColor);
+                sb.AppendFormat("{0}\n", obj.name);
             }
-            else
-            {
-                AppendShared(sb);
-                if(_notOnHubPackages.Count > 0)
-                {
-                    AppendPackagesInfo(sb, "Packages not on Hub", _errorColor, _notOnHubPackages);
-                }
-                if(_downloadErrorsSb.Length > 0)
-                {
-                    sb.AppendFormat("<size=30><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
-                    sb.Append(_downloadErrorsSb);
-                    sb.Append("\n\n");
-                }
-                AppendPackagesInfo(sb, "Installed", _okColor, _packages.Where(obj => obj.existsAndIsValid).ToList());
-            }
-
-            SetJssText(_infoString, sb);
-            _usageButton.gameObject.SetActive(true);
-        }
-
-        void AppendShared(StringBuilder sb)
-        {
-            if(!_isLatestVam && _ifVamNotLatestTrigger.eventTrigger.HasActions())
-            {
-                sb.Append("VAM is not in the latest version (>= v1.22).\n\n");
-            }
-            if(_missingVamBundledPackageNames.Count > 0)
-            {
-                sb.AppendFormat("<size=30><color=#{0}><b>Missing VAM bundled packages:</b></color></size>\n\n", _errorColor);
-                _missingVamBundledPackageNames.ToPrettyString(sb);
-                sb.Append("\n");
-            }
-            if(_versionErrorPackages.Count > 0)
-            {
-                AppendPackagesInfo(sb, "Version error in meta.json", _errorColor, _versionErrorPackages);
-            }
-            if(_disabledPackages.Count > 0)
-            {
-                AppendPackagesInfo(sb, "Disabled", _errorColor, _disabledPackages);
-            }
+            sb.Append("\n");
         }
 
         void SetJssText(JSONStorableString jss, StringBuilder sb)
@@ -1006,24 +997,36 @@ namespace everlaster
             _metaScanned = false;
             _metaJson = null;
 
-            string path = url.val;
-            if(string.IsNullOrEmpty(path))
+            try
             {
+                string path = url.val;
+                if(string.IsNullOrEmpty(path))
+                {
+                    url.val = "";
+                    return;
+                }
+
+                _pathString.val = path;
+                if(!path.EndsWith("meta.json"))
+                {
+                    ShowInfo();
+                    _infoString.val = $"<color=#{_errorColor}>Selected file is not a meta.json file.</color>";
+                    if(!_uiListener.active)
+                    {
+                        logBuilder.Error("Selected file is not a meta.json file");
+                    }
+
+                    return;
+                }
+
+                _metaJson = SuperController.singleton.LoadJSON(path)?.AsObject;
                 url.val = "";
-                return;
+                FindDependenciesCallback();
             }
-
-            _pathString.val = path;
-            if(!path.EndsWith("meta.json"))
+            catch(Exception e)
             {
-                ShowInfo();
-                _infoString.val = $"<color=#{_errorColor}>Selected file is not a meta.json file.</color>";
-                return;
+                logBuilder.Exception(e);
             }
-
-            _metaJson = SuperController.singleton.LoadJSON(path)?.AsObject;
-            url.val = "";
-            FindDependenciesCallback();
         }
 
         void DownloadMissingCallback()
@@ -1213,7 +1216,6 @@ namespace everlaster
             }
         }
 
-        // TODO test
         void CopyErrorsToClipboardCallback()
         {
             var sb = new StringBuilder();
@@ -1234,7 +1236,6 @@ namespace everlaster
             }
         }
 
-        // TODO test
         static void CopyToClipboard(List<PackageObj> packages)
         {
             if(packages.Count > 0)
@@ -1736,64 +1737,63 @@ namespace everlaster
 
         void Teardown()
         {
-            // cleanup
+            try
             {
-                if(_panelRelocated && _missingPackagesPanelT != null && _missingPackagesPanelT.gameObject != null && _hubBrowsePanelT != null)
+                // cleanup
                 {
-                    _missingPackagesPanelT.position = _originalPanelPos;
-                    _missingPackagesPanelT.SetParent(_hubBrowsePanelT);
-                    _missingPackagesPanelT.gameObject.SetActive(false);
-                    _panelRelocated = false;
-                }
-
-                foreach(var obj in _missingPackages)
-                {
-                    obj.CleanupCallbacks();
-                }
-
-                if(_hubWasTempEnabled)
-                {
-                    _hubBrowse.HubEnabled = false;
-                    _hubWasTempEnabled = false;
-                }
-            }
-
-            foreach(var obj in _packages)
-            {
-                obj.SyncExists();
-            }
-
-            // success path; suppresses error triggers and not on Hub packages triggers if all packages happen to somehow exist regardless
-            if(_packages.TrueForAll(obj => obj.existsAndIsValid))
-            {
-                _ifAllDependenciesInstalledTrigger.Trigger();
-                if(_ifAllDependenciesInstalledTrigger.sendToText != null)
-                {
-                    _ifAllDependenciesInstalledTrigger.sendToText.text = "All dependencies are installed!";
-                }
-            }
-            // failure path
-            else
-            {
-                if(_notOnHubPackages.Count > 0)
-                {
-                    _ifNotOnHubPackagesDetectedTrigger.Trigger();
-                    if(_ifNotOnHubPackagesDetectedTrigger.sendToText != null)
+                    if(_panelRelocated && _missingPackagesPanelT != null && _missingPackagesPanelT.gameObject != null && _hubBrowsePanelT != null)
                     {
-                        _ifNotOnHubPackagesDetectedTrigger.sendToText.text = _notOnHubPackages.Select(obj => obj.name).ToPrettyString();
+                        _missingPackagesPanelT.position = _originalPanelPos;
+                        _missingPackagesPanelT.SetParent(_hubBrowsePanelT);
+                        _missingPackagesPanelT.gameObject.SetActive(false);
+                        _panelRelocated = false;
+                    }
+
+                    foreach(var obj in _missingPackages)
+                    {
+                        obj.CleanupCallbacks();
+                    }
+
+                    if(_hubWasTempEnabled)
+                    {
+                        _hubBrowse.HubEnabled = false;
+                        _hubWasTempEnabled = false;
                     }
                 }
 
-                _ifSomePackagesNotInstalledTrigger.Trigger();
-                if(_ifSomePackagesNotInstalledTrigger.sendToText != null)
+                foreach(var obj in _packages)
                 {
-                    _ifSomePackagesNotInstalledTrigger.sendToText.text = _downloadErrorsSb.ToString();
+                    obj.SyncExists();
                 }
-            }
 
-            _downloadCo = null;
-            _finished = true;
-            UpdateFinishedInfo();
+                // success path; suppresses error triggers and not on Hub packages triggers if all packages happen to somehow exist regardless
+                if(_packages.TrueForAll(obj => obj.existsAndIsValid))
+                {
+                    TriggerAndSendText(_ifAllDependenciesInstalledTrigger, _packages);
+                }
+                // failure path
+                else
+                {
+                    if(_notOnHubPackages.Count > 0)
+                    {
+                        TriggerAndSendText(_ifNotOnHubPackagesDetectedTrigger, _notOnHubPackages);
+                    }
+
+                    _ifSomePackagesNotInstalledTrigger.Trigger();
+                    if(_ifSomePackagesNotInstalledTrigger.sendToText != null)
+                    {
+                        _ifSomePackagesNotInstalledTrigger.sendToText.text = _downloadErrorsSb.ToString();
+                    }
+                }
+
+                _downloadCo = null;
+                _finished = true;
+                UpdateInfo();
+            }
+            catch(Exception e)
+            {
+                logBuilder.Exception(e);
+            }
         }
 #endregion Teardown
 

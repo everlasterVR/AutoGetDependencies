@@ -1,5 +1,6 @@
 ﻿using MVR.FileManagementSecure;
 using MVR.Hub;
+using System.Collections.Generic;
 
 namespace everlaster
 {
@@ -18,6 +19,7 @@ namespace everlaster
         public bool existsAndIsValid => exists && versionError == null && !disabled;
 
         public readonly bool isSubDependency;
+        public readonly bool isVamBundled;
         public HubResourcePackageUI packageUI;
         public HubResourcePackage connectedItem;
 
@@ -28,7 +30,7 @@ namespace everlaster
         public bool downloadComplete;
         public string downloadError;
 
-        public PackageObj(string name, string[] parts, bool isSubDependency)
+        public PackageObj(string name, string[] parts, bool isSubDependency, HashSet<string> vamBundledPackageNames)
         {
             this.name = name;
             groupName = $"{parts[0]}.{parts[1]}";
@@ -40,6 +42,11 @@ namespace everlaster
             }
 
             this.isSubDependency = isSubDependency;
+            if(vamBundledPackageNames.Contains(groupName))
+            {
+                isVamBundled = true;
+            }
+
             exists = FileManagerSecure.PackageExists(name);
         }
 
