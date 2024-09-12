@@ -59,8 +59,6 @@ namespace everlaster
         JSONStorableString _infoString;
         UIDynamicButton _usageButton;
         UIDynamicButton _backButton;
-        UIDynamicTextField _usageField;
-        UIDynamicTextField _infoField;
         JSONStorableBool _tempEnableHubBool;
         JSONStorableBool _autoAcceptPackagePluginsBool;
         JSONStorableAction _downloadAction;
@@ -404,8 +402,12 @@ namespace everlaster
                     "\n";
 
                 _usageString.val = usage;
-                _usageField = CreateInfoField(_usageString);
-                var uiTextRectT = _usageField.UItext.GetComponent<RectTransform>();
+                var usageField = CreateInfoField(_usageString);
+                var rectT = usageField.gameObject.GetComponent<RectTransform>();
+                rectT.pivot = Vector2.zero;
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1210);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
+                var uiTextRectT = usageField.UItext.GetComponent<RectTransform>();
                 var uiTextPos = uiTextRectT.anchoredPosition;
                 uiTextRectT.anchoredPosition = new Vector2(uiTextPos.x, uiTextPos.y - 10);
                 var uiTextSize = uiTextRectT.sizeDelta;
@@ -413,27 +415,36 @@ namespace everlaster
             }
 
             {
-                _infoField = CreateInfoField(_infoString);
-                var uiTextRectT = _infoField.UItext.GetComponent<RectTransform>();
-                var uiTextPos = uiTextRectT.anchoredPosition;
-                uiTextRectT.anchoredPosition = new Vector2(uiTextPos.x, uiTextPos.y - 75);
-                var uiTextSize = uiTextRectT.sizeDelta;
-                uiTextRectT.sizeDelta = new Vector2(uiTextSize.x - 8, uiTextSize.y - 85);
-                _infoField.gameObject.SetActive(false);
-
-                var pathFieldT = Instantiate(manager.configurableTextFieldPrefab, _infoField.transform);
+                var pathFieldT = Instantiate(manager.configurableTextFieldPrefab, UITransform);
                 var uiDynamic = pathFieldT.GetComponent<UIDynamicTextField>();
                 uiDynamic.UItext.fontSize = 26;
-                uiDynamic.backgroundColor = Color.clear;
+                uiDynamic.backgroundColor = new Color(0.92f, 0.92f, 0.92f);
                 var layoutElement = pathFieldT.GetComponent<LayoutElement>();
                 DestroyImmediate(layoutElement);
                 var rectT = pathFieldT.GetComponent<RectTransform>();
                 rectT.pivot = Vector2.zero;
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 0, 75);
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 0, 650);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 68);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
                 _pathString.dynamicText = uiDynamic;
                 Utils.DisableScroll(uiDynamic);
+                pathFieldT.gameObject.SetActive(false);
             }
+
+            {
+                var infoField = CreateInfoField(_infoString);
+                var rectT = infoField.gameObject.GetComponent<RectTransform>();
+                rectT.pivot = Vector2.zero;
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 85, 1145);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
+                var uiTextRectT = infoField.UItext.GetComponent<RectTransform>();
+                var uiTextPos = uiTextRectT.anchoredPosition;
+                uiTextRectT.anchoredPosition = new Vector2(uiTextPos.x, uiTextPos.y - 5);
+                var uiTextSize = uiTextRectT.sizeDelta;
+                uiTextRectT.sizeDelta = new Vector2(uiTextSize.x - 8, uiTextSize.y - 10);
+                infoField.gameObject.SetActive(false);
+            }
+
+            // TODO copy to clipboard button lower right corner
         }
 
         void CreateHeader(string text)
@@ -538,10 +549,6 @@ namespace everlaster
             uiDynamic.backgroundColor = new Color(0.92f, 0.92f, 0.92f);
             var layoutElement = textFieldT.GetComponent<LayoutElement>();
             DestroyImmediate(layoutElement);
-            var rectT = textFieldT.GetComponent<RectTransform>();
-            rectT.pivot = Vector2.zero;
-            rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1210);
-            rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
             var scrollView = textFieldT.Find("Scroll View");
             var scrollRect = scrollView.GetComponent<ScrollRect>();
             scrollRect.horizontal = true;
@@ -559,8 +566,9 @@ namespace everlaster
 
             _usageButton.gameObject.SetActive(false);
             _backButton.gameObject.SetActive(true);
-            _infoField.gameObject.SetActive(false);
-            _usageField.gameObject.SetActive(true);
+            _pathString.dynamicText.gameObject.SetActive(false);
+            _infoString.dynamicText.gameObject.SetActive(false);
+            _usageString.dynamicText.gameObject.SetActive(true);
         }
 
         void ShowInfo()
@@ -572,8 +580,9 @@ namespace everlaster
 
             _usageButton.gameObject.SetActive(true);
             _backButton.gameObject.SetActive(false);
-            _usageField.gameObject.SetActive(false);
-            _infoField.gameObject.SetActive(true);
+            _usageString.dynamicText.gameObject.SetActive(false);
+            _pathString.dynamicText.gameObject.SetActive(true);
+            _infoString.dynamicText.gameObject.SetActive(true);
         }
 
         void FindDependenciesCallback(bool rescan = true)
@@ -874,70 +883,99 @@ namespace everlaster
             else if(_finished) _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Wrap;
 
             var sb = new StringBuilder();
+            var sbAlt = new StringBuilder();
+
             if(_packages.Count == 0)
             {
                 sb.Append("Package has no dependencies.\n\n");
+                sbAlt.Append("Package has no dependencies.\n\n");
             }
             else if(_packages.TrueForAll(obj => obj.existsAndIsValid))
             {
-                AppendPackagesInfo(sb, "All dependencies are installed!", _okColor, _packages);
+                AppendPackagesInfo(sb, sbAlt, "All dependencies are installed!", _okColor, _packages);
             }
             else
             {
                 if(!_isLatestVam && _ifVamNotLatestTrigger.eventTrigger.HasActions())
                 {
                     sb.Append("VAM is not in the latest version (>= v1.22).\n\n");
+                    sbAlt.Append("VAM is not in the latest version (>= v1.22).\n\n");
                 }
 
                 if(_missingVamBundledPackages.Count > 0)
                 {
-                    sb.AppendFormat("<size=30><color=#{0}><b>Missing VAM bundled packages:</b></color></size>\n\n", _errorColor);
-                    _missingVamBundledPackages.ToPrettyString(sb);
-                    sb.Append("\n");
+                    AppendPackagesInfo(sb, sbAlt, "Missing VAM bundled packages:", _errorColor, _missingVamBundledPackages);
                 }
 
                 if(_versionErrorPackages.Count > 0)
                 {
-                    AppendPackagesInfo(sb, "Version error in meta.json:", _errorColor, _versionErrorPackages);
+                    AppendPackagesInfo(sb, sbAlt, "Version error in meta.json:", _errorColor, _versionErrorPackages);
                 }
 
                 if(_disabledPackages.Count > 0)
                 {
-                    AppendPackagesInfo(sb, "Disabled:", _errorColor, _disabledPackages);
+                    AppendPackagesInfo(sb, sbAlt, "Disabled:", _errorColor, _disabledPackages);
                 }
 
                 if(_pending)
                 {
-                    AppendPackagesInfo(sb, "Missing, download required:", _errorColor, _missingPackages);
-                    AppendPackagesInfo(sb, "Installed, check for update required:", _updateRequiredColor, _updateRequiredPackages);
-                    AppendPackagesInfo(sb, "Installed, no update required:", _okColor, _installedPackages);
+                    AppendPackagesInfo(sb, sbAlt, "Missing, download required:", _errorColor, _missingPackages);
+                    AppendPackagesInfo(sb, sbAlt, "Installed, check for update required:", _updateRequiredColor, _updateRequiredPackages);
+                    AppendPackagesInfo(sb, sbAlt, "Installed, no update required:", _okColor, _installedPackages);
                 }
                 else if(_finished)
                 {
                     if(_notOnHubPackages.Count > 0)
                     {
-                        AppendPackagesInfo(sb, "Packages not on Hub:", _errorColor, _notOnHubPackages);
+                        AppendPackagesInfo(sb, sbAlt, "Packages not on Hub:", _errorColor, _notOnHubPackages);
                     }
                     if(_downloadErrorsSb.Length > 0)
                     {
                         sb.AppendFormat("<size=30><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
                         sb.Append(_downloadErrorsSb);
                         sb.Append("\n\n");
+                        sbAlt.Append("Errors during download:\n\n");
+                        sbAlt.Append(_downloadErrorsSb);
+                        sbAlt.Append("\n\n");
                     }
-                    AppendPackagesInfo(sb, "Installed:", _okColor, _packages.Where(obj => obj.existsAndIsValid).ToList());
+                    AppendPackagesInfo(sb, sbAlt, "Installed:", _okColor, _packages.Where(obj => obj.existsAndIsValid).ToList());
                 }
             }
 
-            SetJssText(_infoString, sb);
+            try
+            {
+                if(sb.Length > 16000)
+                {
+                    if(sbAlt.Length > 16000)
+                    {
+                        const string truncated = "\n\n(too long, truncated)\n\n";
+                        sbAlt.Length = 16000 - truncated.Length;
+                        sbAlt.Append(truncated);
+                    }
+
+                    _infoString.val = sbAlt.ToString();
+                }
+                else
+                {
+                    _infoString.val = sb.ToString();
+                }
+            }
+            catch(Exception e)
+            {
+                logBuilder.Exception(e);
+            }
+
             _usageButton.gameObject.SetActive(true);
         }
 
-        static void AppendPackagesInfo(StringBuilder sb, string title, string titleColor, List<PackageObj> packages)
+        static void AppendPackagesInfo(StringBuilder sb, StringBuilder sbAlt, string title, string titleColor, List<PackageObj> packages)
         {
             sb.AppendFormat("<size=30><color=#{0}><b>{1}</b></color></size>\n\n", titleColor, title);
+            sbAlt.AppendFormat("{0}\n\n", title);
             if(packages.Count == 0)
             {
                 sb.Append("None.\n\n");
+                sbAlt.Append("None.\n\n");
                 return;
             }
 
@@ -951,8 +989,12 @@ namespace everlaster
                 {
                     sb.AppendFormat("-\u00A0{0}\n", obj.name);
                 }
+
+                sbAlt.AppendFormat("-\u00A0{0}\n", obj.name);
             }
+
             sb.Append("\n");
+            sbAlt.Append("\n");
         }
 
         static void AppendPackagesInfoForUIText(StringBuilder sb, string title, List<PackageObj> packages)
@@ -969,25 +1011,6 @@ namespace everlaster
                 sb.AppendFormat("{0}\n", obj.name);
             }
             sb.Append("\n");
-        }
-
-        void SetJssText(JSONStorableString jss, StringBuilder sb)
-        {
-            try
-            {
-                // TODO test
-                if(sb.Length > 16000)
-                {
-                    const string truncated = "\n\n(too long, truncated)";
-                    sb.Length = 16000 - truncated.Length;
-                    sb.Append(truncated);
-                }
-                jss.val = sb.ToString();
-            }
-            catch(Exception e)
-            {
-                logBuilder.Exception(e);
-            }
         }
 
         static void BeginLoadBrowse(JSONStorableUrl url) => url.shortCuts = FileManagerSecure.GetShortCutsForDirectory("");
