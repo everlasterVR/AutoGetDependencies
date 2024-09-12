@@ -24,6 +24,7 @@ namespace everlaster
         string _loadedScene;
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
+        bool _initialized;
         readonly static string _errorColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0, 0));
         readonly static string _updateRequiredColor = ColorUtility.ToHtmlStringRGBA(new Color(0.44f, 0.44f, 0f));
         readonly static string _okColor = ColorUtility.ToHtmlStringRGBA(new Color(0, 0.50f, 0));
@@ -40,7 +41,6 @@ namespace everlaster
         readonly List<PackageObj> _installedPackages = new List<PackageObj>();
         readonly List<HubResourcePackageUI> _packageUIs = new List<HubResourcePackageUI>();
         readonly List<PackageObj> _notOnHubPackages = new List<PackageObj>();
-        bool _initialized;
         Coroutine _downloadCo;
         Coroutine _handleUserConfirmPanelsCo;
         bool _metaRead;
@@ -53,6 +53,7 @@ namespace everlaster
         JSONStorableBool _alwaysCheckForUpdatesBool;
         JSONStorableBool _identifyDisabledPackagesBool;
         JSONStorableAction _identifyDependenciesAction;
+        JSONStorableAction _selectMetaJsonAction;
         JSONStorableUrl _selectPackageUrl;
         JSONStorableString _usageString;
         JSONStorableString _pathString;
@@ -183,10 +184,15 @@ namespace everlaster
                     endBrowseWithObjectCallback = OnMetaJsonSelected,
                 };
 
-                _identifyDependenciesAction = _metaJson == null
-                    ? new JSONStorableAction("Identify dependencies from meta.json", () => _selectPackageUrl.FileBrowse())
-                    : new JSONStorableAction("Identify dependencies from meta.json", () => FindDependenciesCallback());
+                _identifyDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", () => FindDependenciesCallback());
                 RegisterAction(_identifyDependenciesAction);
+
+                _selectMetaJsonAction = new JSONStorableAction("Select meta.json", () =>
+                {
+                    SuperController.singleton.ShowMainHUDAuto();
+                    _selectPackageUrl.FileBrowse();
+                });
+                RegisterAction(_selectMetaJsonAction);
 
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
                 RegisterBool(_tempEnableHubBool);
@@ -275,11 +281,11 @@ namespace everlaster
             CreateToggle(_identifyDisabledPackagesBool);
 
             {
-                var uiDynamic = CreateButton(_identifyDependenciesAction.name);
+                var uiDynamic = CreateButton(_selectMetaJsonAction.name);
                 Color color;
                 if(ColorUtility.TryParseHtmlString(FIND_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
                 uiDynamic.height = 80;
-                _identifyDependenciesAction.RegisterButton(uiDynamic);
+                _selectMetaJsonAction.RegisterButton(uiDynamic);
             }
 
             CreateSpacer().height = 12;
@@ -324,11 +330,14 @@ namespace everlaster
             {
                 const string usage = "AutoGetDependencies works in two stages:" +
                     "\n" +
-                    "\n(1) Identify dependencies from the meta.json file." +
-                    "\n(2) Download any missing dependencies." +
+                    "\n(1) Select meta.json to identify dependencies from" +
+                    "\n(2) Download any missing dependencies" +
                     "\n" +
                     "\nUse the toggles configure the behavior of these two stages, set up triggers for different end conditions," +
                     " and then execute/trigger the identification and download actions in your scene logic (on scene load, via UIButton etc.)." +
+                    "\n" +
+                    "\nWhen the plugin is loaded as part of a packaged scene, the scene's meta.json is selected automatically, and the actual" +
+                    " identification of dependencies can be triggered via the action 'Identify dependencies from meta.json'." +
                     "\n" +
                     "\n<size=32>1. Identify Dependencies</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
@@ -1135,7 +1144,7 @@ namespace everlaster
             }
             _bindings = new Bindings(nameof(AutoGetDependencies), new List<JSONStorableAction>
             {
-                new JSONStorableAction("IdentifyDependencies", () => _identifyDependenciesAction.actionCallback()),
+                new JSONStorableAction("SelectMetaJson", () => _selectMetaJsonAction.actionCallback()),
                 new JSONStorableAction("DownloadMissing", DownloadMissingCallback),
                 new JSONStorableAction("ForceFinish", ForceFinishCallback),
                 new JSONStorableAction("OpenUI", () => this.SelectPluginUI()),
