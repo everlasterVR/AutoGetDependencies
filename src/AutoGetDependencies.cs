@@ -1625,7 +1625,7 @@ namespace everlaster
 #endregion Download
 
             _handleUserConfirmPanelsCo = StartCoroutine(WaitForUserConfirmPanels());
-            if(_downloadErrorsSb == null)
+            if(_downloadErrorsSb.Length == 0)
             {
                 yield return _handleUserConfirmPanelsCo;
             }
