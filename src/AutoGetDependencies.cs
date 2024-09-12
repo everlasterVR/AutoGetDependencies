@@ -43,7 +43,7 @@ namespace everlaster
         bool _initialized;
         Coroutine _downloadCo;
         Coroutine _handleUserConfirmPanelsCo;
-        bool _metaScanned;
+        bool _metaRead;
         bool _pending;
         bool _finished;
         readonly StringBuilder _downloadErrorsSb = new StringBuilder();
@@ -67,9 +67,6 @@ namespace everlaster
 
         JSONStorableFloat _progressFloat;
         JSONStorableAction _forceFinishAction;
-        JSONStorableAction _copyErrorsToClipboardAction;
-        JSONStorableAction _copyNotOnHubToClipboardAction;
-        JSONStorableAction _copyDisabledToClipboardAction;
         JSONStorableAction _navigateToPluginUIAction;
 
         readonly Dictionary<string, TriggerWrapper> _triggers = new Dictionary<string, TriggerWrapper>();
@@ -177,23 +174,19 @@ namespace everlaster
                 _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", true, (bool _) => RefindDependencies());
                 RegisterBool(_identifyDisabledPackagesBool);
 
-                if(_metaJson == null)
+                _selectPackageUrl = new JSONStorableUrl("Identify dependencies from meta.json", "", "json", "AddonPackages")
                 {
-                    _selectPackageUrl = new JSONStorableUrl("Identify dependencies from meta.json", "", "json", "AddonPackages")
-                    {
-                        allowFullComputerBrowse = false,
-                        allowBrowseAboveSuggestedPath = true,
-                        showDirs = true,
-                        beginBrowseWithObjectCallback = BeginLoadBrowse,
-                        endBrowseWithObjectCallback = OnMetaJsonSelected,
-                    };
-                }
+                    allowFullComputerBrowse = false,
+                    allowBrowseAboveSuggestedPath = true,
+                    showDirs = true,
+                    beginBrowseWithObjectCallback = BeginLoadBrowse,
+                    endBrowseWithObjectCallback = OnMetaJsonSelected,
+                };
 
-                if(containingAtom.type != "SessionPluginManager")
-                {
-                    _identifyDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", () => FindDependenciesCallback());
-                    RegisterAction(_identifyDependenciesAction);
-                }
+                _identifyDependenciesAction = _metaJson == null
+                    ? new JSONStorableAction("Identify dependencies from meta.json", () => _selectPackageUrl.FileBrowse())
+                    : new JSONStorableAction("Identify dependencies from meta.json", () => FindDependenciesCallback());
+                RegisterAction(_identifyDependenciesAction);
 
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
                 RegisterBool(_tempEnableHubBool);
@@ -217,26 +210,17 @@ namespace everlaster
                 _forceFinishAction = new JSONStorableAction("Force finish", ForceFinishCallback);
                 RegisterAction(_forceFinishAction);
 
-                _copyErrorsToClipboardAction = new JSONStorableAction("Copy errors to clipboard", CopyErrorsToClipboardCallback);
-                RegisterAction(_copyErrorsToClipboardAction);
-
-                _copyNotOnHubToClipboardAction = new JSONStorableAction("Copy 'Not on Hub' names to clipboard", () => CopyToClipboard(_notOnHubPackages));
-                RegisterAction(_copyNotOnHubToClipboardAction);
-
-                _copyDisabledToClipboardAction = new JSONStorableAction("Copy disabled names to clipboard", () => CopyToClipboard(_disabledPackages));
-                RegisterAction(_copyDisabledToClipboardAction);
-
                 _navigateToPluginUIAction = new JSONStorableAction("Open UI", () => this.SelectPluginUI());
                 RegisterAction(_navigateToPluginUIAction);
 
                 SimpleTriggerHandler.LoadAssets();
-                _ifDownloadPendingTrigger = AddTrigger("If Download Pending", "If download pending...");
-                _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected", "If disabled packages detected...");
-                _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed", "If all dependencies installed...");
-                _ifVamBundledPackagesMissingTrigger = AddTrigger("If VaM Bundled Packages Missing", "If VaM bundled packages missing...");
-                _ifVamNotLatestTrigger = AddTrigger("If VaM Not Latest", "If VaM not latest (>= v1.22)...", false);
-                _ifSomePackagesNotInstalledTrigger = AddTrigger("If Some Packages Not Installed", "If some packages not installed...");
-                _ifNotOnHubPackagesDetectedTrigger = AddTrigger("If 'Not On Hub' Packages Detected", "If 'not on Hub' packages detected...");
+                _ifDownloadPendingTrigger = AddTrigger("If Download Pending");
+                _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected");
+                _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed");
+                _ifVamBundledPackagesMissingTrigger = AddTrigger("If VaM Bundled Packages Missing");
+                _ifVamNotLatestTrigger = AddTrigger("If VaM Not Latest", false);
+                _ifSomePackagesNotInstalledTrigger = AddTrigger("If Some Packages Not Installed");
+                _ifNotOnHubPackagesDetectedTrigger = AddTrigger("If 'Not On Hub' Packages Detected");
 
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
                 _uiTexts.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UIText"));
@@ -259,7 +243,7 @@ namespace everlaster
 
         void RefindDependencies()
         {
-            if(_metaJson == null || !_metaScanned)
+            if(_metaJson == null || !_metaRead)
             {
                 return;
             }
@@ -290,15 +274,6 @@ namespace everlaster
             CreateToggle(_alwaysCheckForUpdatesBool);
             CreateToggle(_identifyDisabledPackagesBool);
 
-            if(_metaJson == null)
-            {
-                var uiDynamic = CreateButton(_selectPackageUrl.name);
-                Color color;
-                if(ColorUtility.TryParseHtmlString(FIND_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
-                uiDynamic.height = 80;
-                uiDynamic.AddListener(() => _selectPackageUrl.FileBrowse());
-            }
-            else
             {
                 var uiDynamic = CreateButton(_identifyDependenciesAction.name);
                 Color color;
@@ -590,7 +565,7 @@ namespace everlaster
         {
             if(_metaJson == null)
             {
-                _metaScanned = false;
+                _metaRead = false;
                 return;
             }
 
@@ -646,7 +621,7 @@ namespace everlaster
             }
 
             UpdateInfo();
-            _metaScanned = true;
+            _metaRead = true;
         }
 
         void SetProgress(float value)
@@ -750,13 +725,13 @@ namespace everlaster
                 if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
                 {
                     _ifDownloadPendingTrigger.Trigger();
-                    if(_ifDownloadPendingTrigger.sendToText != null)
+                    if(_ifDownloadPendingTrigger.sendToString != null)
                     {
                         var sb = new StringBuilder();
                         AppendPackagesInfoForUIText(sb, "Missing, download required:", _missingPackages);
                         AppendPackagesInfoForUIText(sb, "Installed, check for update required:", _updateRequiredPackages);
                         AppendPackagesInfoForUIText(sb, "Installed, no update required:", _installedPackages);
-                        _ifDownloadPendingTrigger.sendToText.text = sb.ToString();
+                        _ifDownloadPendingTrigger.sendToString.val = sb.ToString();
                     }
 
                     _pending = true;
@@ -866,9 +841,9 @@ namespace everlaster
         static void TriggerAndSendText(TriggerWrapper trigger, List<PackageObj> packages)
         {
             trigger.Trigger();
-            if(trigger.sendToText != null)
+            if(trigger.sendToString != null)
             {
-                trigger.sendToText.text = packages.Select(obj => obj.name).ToPrettyString();
+                trigger.sendToString.val = packages.Select(obj => obj.name).ToPrettyString();
             }
         }
 
@@ -1018,7 +993,7 @@ namespace everlaster
 
         void OnMetaJsonSelected(JSONStorableUrl url)
         {
-            _metaScanned = false;
+            _metaRead = false;
             _metaJson = null;
 
             try
@@ -1160,16 +1135,9 @@ namespace everlaster
             }
             _bindings = new Bindings(nameof(AutoGetDependencies), new List<JSONStorableAction>
             {
-                new JSONStorableAction("FindDependencies", () =>
-                {
-                    if(containingAtom.type == "SessionPluginManager") _selectPackageUrl.FileBrowse();
-                    else FindDependenciesCallback();
-                }),
+                new JSONStorableAction("IdentifyDependencies", () => _identifyDependenciesAction.actionCallback()),
                 new JSONStorableAction("DownloadMissing", DownloadMissingCallback),
                 new JSONStorableAction("ForceFinish", ForceFinishCallback),
-                new JSONStorableAction("CopyErrorsToClipboard", CopyErrorsToClipboardCallback),
-                new JSONStorableAction("CopyNotOnHubToClipboard", _copyNotOnHubToClipboardAction.actionCallback),
-                new JSONStorableAction("CopyDisabledToClipboard", _copyDisabledToClipboardAction.actionCallback),
                 new JSONStorableAction("OpenUI", () => this.SelectPluginUI()),
             });
         }
@@ -1243,36 +1211,10 @@ namespace everlaster
             }
         }
 
-        void CopyErrorsToClipboardCallback()
+        TriggerWrapper AddTrigger(string name, bool enableSendText = true)
         {
-            var sb = new StringBuilder();
-            if(_versionErrorPackages.Count > 0)
-            {
-                sb.Append("Version errors in meta.json:\n\n");
-                foreach(var obj in _versionErrorPackages)
-                {
-                    sb.AppendFormat("{0}: {1}\n", obj.name, obj.versionError);
-                }
-                sb.Append("\n");
-            }
-
-            sb.Append(_downloadErrorsSb);
-            if(sb.Length > 0)
-            {
-                GUIUtility.systemCopyBuffer = sb.ToString();
-            }
-        }
-
-        static void CopyToClipboard(List<PackageObj> packages)
-        {
-            if(packages.Count > 0)
-            {
-                GUIUtility.systemCopyBuffer = packages.Select(obj => obj.name).ToPrettyString();
-            }
-        }
-
-        TriggerWrapper AddTrigger(string name, string label, bool enableSendText = true)
-        {
+            string label = name.First().ToString().ToUpper() + name.Substring(1).ToLower() + "...";
+            label = label.Replace(" vam ", " VaM ");
             var trigger = _triggers[name] = new TriggerWrapper(this, name, label);
             if(enableSendText)
             {
@@ -1299,6 +1241,8 @@ namespace everlaster
                     trigger.RegisterOnCloseCallback(() => uiDynamic.popup.visible = false);
                     trigger.uiTextChooser.popup = uiDynamic.popup;
                 };
+
+                trigger.RegisterCopyToClipboardAction();
             }
 
             return trigger;
@@ -1807,9 +1751,9 @@ namespace everlaster
                     }
 
                     _ifSomePackagesNotInstalledTrigger.Trigger();
-                    if(_ifSomePackagesNotInstalledTrigger.sendToText != null)
+                    if(_ifSomePackagesNotInstalledTrigger.sendToString != null)
                     {
-                        _ifSomePackagesNotInstalledTrigger.sendToText.text = _downloadErrorsSb.ToString();
+                        _ifSomePackagesNotInstalledTrigger.sendToString.val = _downloadErrorsSb.ToString();
                     }
                 }
 

@@ -29,7 +29,8 @@ namespace everlaster
 
         public JSONStorableStringChooser uiTextChooser;
         public Atom sendToAtom;
-        public Text sendToText;
+        public JSONStorableString sendToString;
+        Text _sendToText;
 
         public TriggerWrapper(AutoGetDependencies script, string name, string label)
         {
@@ -41,6 +42,15 @@ namespace everlaster
         }
 
         public void RegisterOnCloseCallback(Trigger.OnCloseTriggerActionsPanel callback) => eventTrigger.onCloseTriggerActionsPanel += callback;
+
+        public void RegisterCopyToClipboardAction()
+        {
+            var action = new JSONStorableAction($"{eventTrigger.Name}: Copy to clipboard", () =>
+            {
+                if(sendToString != null) GUIUtility.systemCopyBuffer = sendToString.val;
+            });
+            _script.RegisterAction(action);
+        }
 
         public void UpdateButton()
         {
@@ -64,25 +74,27 @@ namespace everlaster
             try
             {
                 sendToAtom = null;
-                if(sendToText != null)
+                sendToString = null;
+                if(_sendToText != null)
                 {
                     RestoreUIText();
                 }
-                sendToText = null;
+                _sendToText = null;
 
                 if (!string.IsNullOrEmpty(option))
                 {
-                    var uiTextObj = uiTexts.Find(atom => atom.uid == option);
-                    if (uiTextObj == null)
+                    var uiTextAtom = uiTexts.Find(atom => atom.uid == option);
+                    if (uiTextAtom == null)
                     {
                         _script.logBuilder.Error($"UIText '{option}' not found");
                         uiTextChooser.valNoCallback = sendToAtom != null ? sendToAtom.uid ?? "" : "";
                         return;
                     }
 
-                    sendToText = uiTextObj.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder/Text").GetComponent<Text>();
+                    sendToString = uiTextAtom.GetStorableByID("Text").GetStringJSONParam("text");
+                    _sendToText = uiTextAtom.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder/Text").GetComponent<Text>();
                     ConfigureUIText();
-                    sendToAtom = uiTextObj;
+                    sendToAtom = uiTextAtom;
                 }
             }
             catch (Exception e)
@@ -93,9 +105,9 @@ namespace everlaster
 
         void ConfigureUIText()
         {
-            _storeTextAlignment = sendToText.alignment;
-            sendToText.alignment = TextAnchor.UpperLeft;
-            var rectT = sendToText.rectTransform;
+            _storeTextAlignment = _sendToText.alignment;
+            _sendToText.alignment = TextAnchor.UpperLeft;
+            var rectT = _sendToText.rectTransform;
             var pos = rectT.anchoredPosition;
             var size = rectT.sizeDelta;
             _storeTextPos = pos;
@@ -110,9 +122,8 @@ namespace everlaster
 
         void RestoreUIText()
         {
-            sendToText.alignment = _storeTextAlignment;
-            sendToText.text = "";
-            var rectT = sendToText.rectTransform;
+            _sendToText.alignment = _storeTextAlignment;
+            var rectT = _sendToText.rectTransform;
             rectT.anchoredPosition = _storeTextPos;
             rectT.sizeDelta = _storeTextSize;
         }
@@ -223,7 +234,7 @@ namespace everlaster
         public void Destroy()
         {
             eventTrigger.OnRemove();
-            if(sendToText != null)
+            if(_sendToText != null)
             {
                 RestoreUIText();
             }
