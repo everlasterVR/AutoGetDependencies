@@ -1134,15 +1134,18 @@ namespace everlaster
             {
                 return;
             }
-
             _bindings = new Bindings(nameof(AutoGetDependencies), new List<JSONStorableAction>
             {
-                new JSONStorableAction("FindDependencies", () => FindDependenciesCallback()),
+                new JSONStorableAction("FindDependencies", () =>
+                {
+                    if(containingAtom.type == "SessionPluginManager") _selectPackageUrl.FileBrowse();
+                    else FindDependenciesCallback();
+                }),
                 new JSONStorableAction("DownloadMissing", DownloadMissingCallback),
                 new JSONStorableAction("ForceFinish", ForceFinishCallback),
                 new JSONStorableAction("CopyErrorsToClipboard", CopyErrorsToClipboardCallback),
-                new JSONStorableAction("CopyNotOnHubToClipboard", () => CopyToClipboard(_notOnHubPackages)),
-                new JSONStorableAction("CopyDisabledToClipboard", () => CopyToClipboard(_disabledPackages)),
+                new JSONStorableAction("CopyNotOnHubToClipboard", _copyNotOnHubToClipboardAction.actionCallback),
+                new JSONStorableAction("CopyDisabledToClipboard", _copyDisabledToClipboardAction.actionCallback),
                 new JSONStorableAction("OpenUI", () => this.SelectPluginUI()),
             });
         }
