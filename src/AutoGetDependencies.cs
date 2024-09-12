@@ -984,7 +984,7 @@ namespace everlaster
 
         static void AppendPackagesInfoForUIText(StringBuilder sb, string title, List<PackageObj> packages)
         {
-            sb.AppendFormat("{0}:\n\n", title);
+            sb.AppendFormat("{0}\n\n", title);
             if(packages.Count == 0)
             {
                 sb.Append("None.\n\n");
@@ -1750,6 +1750,20 @@ namespace everlaster
                 if(_packages.TrueForAll(obj => obj.existsAndIsValid))
                 {
                     TriggerAndSendText(_ifAllDependenciesInstalledTrigger, _packages);
+                    if(_missingVamBundledPackages.Count > 0)
+                    {
+                        _ifVamBundledPackagesMissingTrigger.sendToString.val = "";
+                    }
+
+                    if(_disabledPackages.Count > 0)
+                    {
+                        _ifDisabledPackagesDetectedTrigger.sendToString.val = "";
+                    }
+
+                    if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
+                    {
+                        _ifDownloadPendingTrigger.sendToString.val = "";
+                    }
                 }
                 // failure path
                 else
