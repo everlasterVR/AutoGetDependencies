@@ -133,7 +133,7 @@ namespace everlaster
         {
             try
             {
-                if(ValidateTrigger(eventTrigger))
+                if(ValidateTrigger())
                 {
                     eventTrigger.Trigger();
                     if(button != null)
@@ -170,10 +170,10 @@ namespace everlaster
             _flashButtonCo = null;
         }
 
-        bool ValidateTrigger(EventTrigger trigger)
+        bool ValidateTrigger()
         {
             string error = null;
-            foreach(var action in trigger.GetDiscreteActionsStart())
+            foreach(var action in eventTrigger.GetDiscreteActionsStart())
             {
                 if(action.receiverAtom == null)
                 {
@@ -204,7 +204,7 @@ namespace everlaster
 
             if(error != null && _script.logErrorsBool.val)
             {
-                _script.logBuilder.Error($"{trigger.Name}: receiverAtom was null");
+                _script.logBuilder.Error($"{eventTrigger.Name}: {error}");
                 return false;
             }
 
@@ -238,6 +238,10 @@ namespace everlaster
                 if(jc.HasKey(eventTrigger.Name))
                 {
                     eventTrigger.RestoreFromJSON(jc[eventTrigger.Name].AsObject ?? new JSONClass(), subscenePrefix, mergeRestore);
+                    if(_script.logErrorsBool.val)
+                    {
+                        ValidateTrigger();
+                    }
                 }
                 else if(setMissingToDefault)
                 {
