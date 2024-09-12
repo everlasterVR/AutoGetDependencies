@@ -603,6 +603,9 @@ namespace everlaster
             _missingPackages.Clear();
             _updateRequiredPackages.Clear();
             _installedPackages.Clear();
+            _ifDisabledPackagesDetectedTrigger.ResetText();
+            _ifVamBundledPackagesMissingTrigger.ResetText();
+            _ifDownloadPendingTrigger.ResetText();
 
             try
             {
@@ -734,14 +737,14 @@ namespace everlaster
                 if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
                 {
                     _ifDownloadPendingTrigger.Trigger();
-                    if(_ifDownloadPendingTrigger.sendToString != null)
+                    _ifDownloadPendingTrigger.SendText(() =>
                     {
                         var sb = new StringBuilder();
                         AppendPackagesInfoForUIText(sb, "Missing, download required:", _missingPackages);
                         AppendPackagesInfoForUIText(sb, "Installed, check for update required:", _updateRequiredPackages);
                         AppendPackagesInfoForUIText(sb, "Installed, no update required:", _installedPackages);
-                        _ifDownloadPendingTrigger.sendToString.val = sb.ToString();
-                    }
+                        return sb.ToString();
+                    });
 
                     _pending = true;
                 }
@@ -850,10 +853,7 @@ namespace everlaster
         static void TriggerAndSendText(TriggerWrapper trigger, List<PackageObj> packages)
         {
             trigger.Trigger();
-            if(trigger.sendToString != null)
-            {
-                trigger.sendToString.val = packages.Select(obj => obj.name).ToPrettyString();
-            }
+            trigger.SendText(packages.Select(obj => obj.name).ToPrettyString());
         }
 
         void UpdateInfo()
@@ -1752,17 +1752,17 @@ namespace everlaster
                     TriggerAndSendText(_ifAllDependenciesInstalledTrigger, _packages);
                     if(_missingVamBundledPackages.Count > 0)
                     {
-                        _ifVamBundledPackagesMissingTrigger.sendToString.val = "";
+                        _ifVamBundledPackagesMissingTrigger.ResetText();
                     }
 
                     if(_disabledPackages.Count > 0)
                     {
-                        _ifDisabledPackagesDetectedTrigger.sendToString.val = "";
+                        _ifDisabledPackagesDetectedTrigger.ResetText();
                     }
 
                     if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
                     {
-                        _ifDownloadPendingTrigger.sendToString.val = "";
+                        _ifDownloadPendingTrigger.ResetText();
                     }
                 }
                 // failure path
@@ -1774,10 +1774,7 @@ namespace everlaster
                     }
 
                     _ifSomePackagesNotInstalledTrigger.Trigger();
-                    if(_ifSomePackagesNotInstalledTrigger.sendToString != null)
-                    {
-                        _ifSomePackagesNotInstalledTrigger.sendToString.val = _downloadErrorsSb.ToString();
-                    }
+                    _ifSomePackagesNotInstalledTrigger.SendText(_downloadErrorsSb.ToString());
                 }
 
                 _downloadCo = null;

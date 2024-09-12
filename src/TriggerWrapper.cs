@@ -29,8 +29,9 @@ namespace everlaster
 
         public JSONStorableStringChooser uiTextChooser;
         public Atom sendToAtom;
-        public JSONStorableString sendToString;
+        JSONStorableString _sendToString;
         Text _sendToText;
+        bool _textSent;  // exists only for the demo scene
 
         public TriggerWrapper(AutoGetDependencies script, string name, string label)
         {
@@ -47,7 +48,7 @@ namespace everlaster
         {
             var action = new JSONStorableAction($"{eventTrigger.Name}: Copy to clipboard", () =>
             {
-                if(sendToString != null) GUIUtility.systemCopyBuffer = sendToString.val;
+                if(_sendToString != null) GUIUtility.systemCopyBuffer = _sendToString.val;
             });
             _script.RegisterAction(action);
         }
@@ -74,7 +75,7 @@ namespace everlaster
             try
             {
                 sendToAtom = null;
-                sendToString = null;
+                _sendToString = null;
                 if(_sendToText != null)
                 {
                     RestoreUIText();
@@ -91,7 +92,7 @@ namespace everlaster
                         return;
                     }
 
-                    sendToString = uiTextAtom.GetStorableByID("Text").GetStringJSONParam("text");
+                    _sendToString = uiTextAtom.GetStorableByID("Text").GetStringJSONParam("text");
                     _sendToText = uiTextAtom.reParentObject.transform.Find("object/rescaleObject/Canvas/Holder/Text").GetComponent<Text>();
                     ConfigureUIText();
                     sendToAtom = uiTextAtom;
@@ -208,6 +209,26 @@ namespace everlaster
             }
 
             return true;
+        }
+
+        public void SendText(string val)
+        {
+            _sendToString?.SetVal(val);
+            _textSent = true;
+        }
+
+        public void SendText(Func<string> buildString)
+        {
+            _sendToString?.SetVal(buildString());
+            _textSent = true;
+        }
+
+        public void ResetText()
+        {
+            if(_textSent)
+            {
+                _sendToString?.SetVal("");
+            }
         }
 
         public void RestoreFromJSON(JSONClass jc, string subscenePrefix, bool mergeRestore, bool setMissingToDefault = true)
