@@ -188,7 +188,8 @@ namespace everlaster
                         endBrowseWithObjectCallback = OnMetaJsonSelected,
                     };
                 }
-                else
+
+                if(containingAtom.type != "SessionPluginManager")
                 {
                     _identifyDependenciesAction = new JSONStorableAction("Identify dependencies from meta.json", () => FindDependenciesCallback());
                     RegisterAction(_identifyDependenciesAction);
