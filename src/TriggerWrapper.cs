@@ -162,7 +162,7 @@ namespace everlaster
             while(elapsed < duration)
             {
                 button.buttonColor = Color.Lerp(Color.green, _defaultButtonColor, elapsed / duration);
-                elapsed += Time.unscaledDeltaTime;
+                elapsed += Time.deltaTime;
                 yield return null;
             }
 

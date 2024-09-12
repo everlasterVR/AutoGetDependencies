@@ -1869,7 +1869,7 @@ namespace everlaster
             {
                 foreach(var pair in _triggers)
                 {
-                    pair.Value.RestoreFromJSON(jc, _subScenePrefix, base.mergeRestore, setMissingToDefault);
+                    pair.Value.RestoreFromJSON(jc, _subScenePrefix, mergeRestore, setMissingToDefault);
                 }
             }
         }
