@@ -608,9 +608,10 @@ namespace everlaster
             _missingPackages.Clear();
             _updateRequiredPackages.Clear();
             _installedPackages.Clear();
-            _ifDisabledPackagesDetectedTrigger.ResetText();
-            _ifVamBundledPackagesMissingTrigger.ResetText();
-            _ifDownloadPendingTrigger.ResetText();
+            foreach(var pair in _triggers)
+            {
+                pair.Value.ResetText();
+            }
 
             try
             {
@@ -1779,9 +1780,10 @@ namespace everlaster
                     }
 
                     _ifSomePackagesNotInstalledTrigger.Trigger();
-                    _ifSomePackagesNotInstalledTrigger.SendText(_downloadErrorsSb.ToString());
+                    _ifSomePackagesNotInstalledTrigger.SendText(_downloadErrorsSb.Length > 0 ? _downloadErrorsSb.ToString() : "No errors.");
                 }
 
+                _ifDownloadPendingTrigger.ResetText();
                 _downloadCo = null;
                 _finished = true;
                 UpdateInfo();
