@@ -238,17 +238,17 @@ namespace everlaster
                 RegisterAction(_navigateToPluginUIAction);
 
                 SimpleTriggerHandler.LoadAssets();
-                _ifDownloadPendingTrigger = AddTrigger("If Download Pending");
-                _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected");
-                _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed");
-                _ifVamBundledPackagesMissingTrigger = AddTrigger("If VaM Bundled Packages Missing");
+
+                _ifDownloadPendingTrigger = AddTrigger("If Download Pending", "If download pending...");
+                _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected", "If disabled packages detected...");
+                _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed", "If all dependencies installed...");
+                _ifVamBundledPackagesMissingTrigger = AddTrigger("If VaM Bundled Packages Missing", "If VaM bundled packages missing...");
+                _ifSomePackagesNotInstalledTrigger = AddTrigger("If Some Packages Not Installed", "If some packages not installed...");
                 if(!_isSessionPlugin)
                 {
-                    _ifVamNotLatestTrigger = AddTrigger("If VaM Not Latest", false);
+                    _ifVamNotLatestTrigger = AddTrigger("If VaM Not Latest", "If VaM not latest (>= v1.22)...", false);
                 }
-                _ifSomePackagesNotInstalledTrigger = AddTrigger("If Some Packages Not Installed");
-                _ifNotOnHubPackagesDetectedTrigger = AddTrigger("If 'Not On Hub' Packages Detected");
-
+                _ifNotOnHubPackagesDetectedTrigger = AddTrigger("If 'Not On Hub' Packages Detected", "If 'not on Hub' packages detected...");
 
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
                 _uiTexts.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UIText"));
@@ -1272,10 +1272,8 @@ namespace everlaster
             sliderHandleImg.color = color;
         }
 
-        TriggerWrapper AddTrigger(string name, bool enableSendText = true)
+        TriggerWrapper AddTrigger(string name, string label, bool enableSendText = true)
         {
-            string label = name.First().ToString().ToUpper() + name.Substring(1).ToLower() + "...";
-            label = label.Replace(" vam ", " VaM ");
             var trigger = _triggers[name] = new TriggerWrapper(this, name, label);
             if(enableSendText)
             {
