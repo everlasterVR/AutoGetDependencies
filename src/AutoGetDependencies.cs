@@ -29,6 +29,7 @@ namespace everlaster
         Bindings _bindings;
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
+        bool _isSessionPlugin;
         bool _initialized;
         readonly static string _errorColor = ColorUtility.ToHtmlStringRGBA(new Color(0.75f, 0, 0));
         readonly static string _updateRequiredColor = ColorUtility.ToHtmlStringRGBA(new Color(0.44f, 0.44f, 0f));
@@ -66,6 +67,7 @@ namespace everlaster
         JSONStorableString _infoString;
         UIDynamicButton _usageButton;
         UIDynamicButton _backButton;
+        JSONStorableBool _autoDownloadIfPendingBool;
         JSONStorableBool _tempEnableHubBool;
         JSONStorableBool _autoAcceptPackagePluginsBool;
         JSONStorableAction _downloadAction;
@@ -165,6 +167,7 @@ namespace everlaster
                 _isLatestVam = false;
                 #endif
 
+                _isSessionPlugin = containingAtom.type == "SessionPluginManager";
                 _usageString = new JSONStorableString("Usage", "");
                 _pathString = new JSONStorableString("Path", "");
                 _infoString = new JSONStorableString("Info", "");
@@ -205,6 +208,9 @@ namespace everlaster
                 });
                 RegisterAction(_scanLoadedSceneMetaJson);
 
+                _autoDownloadIfPendingBool = new JSONStorableBool("Auto-download if pending", false);
+                RegisterBool(_autoDownloadIfPendingBool);
+
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
                 RegisterBool(_tempEnableHubBool);
 
@@ -235,9 +241,13 @@ namespace everlaster
                 _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected");
                 _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed");
                 _ifVamBundledPackagesMissingTrigger = AddTrigger("If VaM Bundled Packages Missing");
-                _ifVamNotLatestTrigger = AddTrigger("If VaM Not Latest", false);
+                if(!_isSessionPlugin)
+                {
+                    _ifVamNotLatestTrigger = AddTrigger("If VaM Not Latest", false);
+                }
                 _ifSomePackagesNotInstalledTrigger = AddTrigger("If Some Packages Not Installed");
                 _ifNotOnHubPackagesDetectedTrigger = AddTrigger("If 'Not On Hub' Packages Detected");
+
 
                 _uiSliders.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UISlider"));
                 _uiTexts.AddRange(SuperController.singleton.GetAtoms().Where(atom => atom.type == "UIText"));
@@ -309,6 +319,10 @@ namespace everlaster
 
             CreateSpacer().height = 6;
             CreateHeader("2. Download Dependencies");
+            if(_isSessionPlugin)
+            {
+                CreateToggle(_autoDownloadIfPendingBool);
+            }
             CreateToggle(_tempEnableHubBool);
             CreateToggle(_autoAcceptPackagePluginsBool);
             {
@@ -340,14 +354,17 @@ namespace everlaster
             _backButton.gameObject.SetActive(false);
 
             {
-                const string usage = "AutoGetDependencies works in two stages:" +
+                const string usage1 =
+                    "AutoGetDependencies works in two stages:" +
                     "\n" +
                     "\n(1) Select meta.json to identify dependencies from" +
                     "\n(2) Download any missing dependencies" +
-                    "\n" +
+                    "\n";
+                const string usage2 =
                     "\nUse the toggles configure the behavior of these two stages, set up triggers for different end conditions," +
                     " and then execute/trigger the identification and download actions in your scene logic (on scene load, via UIButton etc.)." +
-                    "\n" +
+                    "\n";
+                const string usage3 =
                     "\n<size=32>1. Identify Dependencies</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
                     "\n<b>Search sub-dependencies</b>\nIdentify missing packages that are not direct dependencies of the scene's package." +
@@ -394,7 +411,7 @@ namespace everlaster
                     "\n<b>'If 'Not on Hub' packages detected...'</b> executes if any missing dependencies couldn't be downloaded because they were not found on the Hub." +
                     "\n";
 
-                _usageString.val = usage;
+                _usageString.val = _isSessionPlugin ? usage1 + usage3 : usage1 + usage2 + usage3;
                 var usageField = CreateInfoField(_usageString);
                 var rectT = usageField.gameObject.GetComponent<RectTransform>();
                 rectT.pivot = Vector2.zero;
@@ -458,6 +475,11 @@ namespace everlaster
 
         void CreateTriggerMenuButton(TriggerWrapper trigger)
         {
+            if(trigger == null)
+            {
+                return;
+            }
+
             var uiDynamic = CreateButton(trigger.label);
             uiDynamic.AddListener(() =>
             {
@@ -629,7 +651,7 @@ namespace everlaster
 
             if(!_isLatestVam)
             {
-                _ifVamNotLatestTrigger.Trigger();
+                _ifVamNotLatestTrigger?.Trigger();
             }
 
             if(_packages.Count == 0)
@@ -643,6 +665,11 @@ namespace everlaster
 
             UpdateInfo();
             _metaRead = true;
+
+            if(_pending && _autoDownloadIfPendingBool.val)
+            {
+                DownloadMissingCallback();
+            }
         }
 
         void SetProgress(float value)
