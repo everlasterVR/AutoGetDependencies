@@ -27,7 +27,6 @@ namespace everlaster
         bool _uiCreated;
         public LogBuilder logBuilder { get; private set; }
         Bindings _bindings;
-        string _loadedScene;
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
         bool _initialized;
@@ -59,9 +58,9 @@ namespace everlaster
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableBool _alwaysCheckForUpdatesBool;
         JSONStorableBool _identifyDisabledPackagesBool;
-        JSONStorableAction _identifyDependenciesAction;
+        JSONStorableAction _scanLoadedSceneMetaJson;
         JSONStorableAction _selectMetaJsonAction;
-        JSONStorableUrl _selectPackageUrl;
+        JSONStorableUrl _selectMetaJsonUrl;
         JSONStorableString _usageString;
         JSONStorableString _pathString;
         JSONStorableString _infoString;
@@ -170,7 +169,6 @@ namespace everlaster
                 _pathString = new JSONStorableString("Path", "");
                 _infoString = new JSONStorableString("Info", "");
 
-                _loadedScene = SuperController.singleton.LoadedSceneName;
                 _metaJson = FindLoadedSceneMetaJson();
 
                 _rescanPackagesOnSelectBool = new JSONStorableBool("Rescan packages on select meta json", false);
@@ -182,27 +180,30 @@ namespace everlaster
                 _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false, (bool _) => RefindDependencies());
                 RegisterBool(_alwaysCheckForUpdatesBool);
 
-                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", true, (bool _) => RefindDependencies());
+                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", false, (bool _) => RefindDependencies());
                 RegisterBool(_identifyDisabledPackagesBool);
 
-                _selectPackageUrl = new JSONStorableUrl("Identify dependencies from meta json", "", "json", "AddonPackages")
+                _selectMetaJsonUrl = new JSONStorableUrl("_selectMetaJsonUrl", "", "json", "AddonPackages")
                 {
                     allowFullComputerBrowse = false,
                     allowBrowseAboveSuggestedPath = true,
                     showDirs = true,
-                    beginBrowseWithObjectCallback = BeginLoadBrowse,
                     endBrowseWithObjectCallback = OnMetaJsonSelected,
                 };
-
-                _identifyDependenciesAction = new JSONStorableAction("Identify dependencies from meta json", () => FindDependenciesCallback());
-                RegisterAction(_identifyDependenciesAction);
 
                 _selectMetaJsonAction = new JSONStorableAction("Select meta json", () =>
                 {
                     SuperController.singleton.ShowMainHUDAuto();
-                    _selectPackageUrl.FileBrowse();
+                    _selectMetaJsonUrl.FileBrowse();
                 });
                 RegisterAction(_selectMetaJsonAction);
+
+                _scanLoadedSceneMetaJson = new JSONStorableAction("Scan loaded scene meta json", () =>
+                {
+                    _metaJson = FindLoadedSceneMetaJson();
+                    FindDependenciesCallback();
+                });
+                RegisterAction(_scanLoadedSceneMetaJson);
 
                 _tempEnableHubBool = new JSONStorableBool("Temp auto-enable Hub if needed", false);
                 RegisterBool(_tempEnableHubBool);
@@ -269,12 +270,13 @@ namespace everlaster
 
         JSONClass FindLoadedSceneMetaJson()
         {
-            if(_loadedScene == null || !_loadedScene.Contains(":/"))
+            string loadedScene =  SuperController.singleton.LoadedSceneName;
+            if(loadedScene == null || !loadedScene.Contains(":/"))
             {
                 return null;
             }
 
-            string metaJsonPath = _loadedScene.Split(':')[0] + ":/meta.json";
+            string metaJsonPath = loadedScene.Split(':')[0] + ":/meta.json";
             _pathString.val = metaJsonPath;
             return SuperController.singleton.LoadJSON(metaJsonPath)?.AsObject;
         }
@@ -345,9 +347,6 @@ namespace everlaster
                     "\n" +
                     "\nUse the toggles configure the behavior of these two stages, set up triggers for different end conditions," +
                     " and then execute/trigger the identification and download actions in your scene logic (on scene load, via UIButton etc.)." +
-                    "\n" +
-                    "\nWhen the plugin is loaded as part of a packaged scene, the scene's meta.json is selected automatically, and the actual" +
-                    " identification of dependencies can be triggered via the action 'Identify dependencies from meta json'." +
                     "\n" +
                     "\n<size=32>1. Identify Dependencies</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
@@ -1007,8 +1006,6 @@ namespace everlaster
             }
             sb.Append("\n");
         }
-
-        static void BeginLoadBrowse(JSONStorableUrl url) => url.shortCuts = FileManagerSecure.GetShortCutsForDirectory("");
 
         void OnMetaJsonSelected(JSONStorableUrl url)
         {
