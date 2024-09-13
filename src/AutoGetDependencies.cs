@@ -400,8 +400,8 @@ namespace everlaster
                 const string usage3 =
                     "\n<size=32>1. Identify Dependencies</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
-                    "\n<b>Search sub-dependencies</b>\nIdentify missing packages that are not direct dependencies of the scene's package." +
-                    " In the resulting dependency list, sub-dependencies are greyed out (not strictly required for the scene)." +
+                    "\n<b>Search sub-dependencies</b>\nIdentify missing packages that are not direct dependencies of the package." +
+                    " In the resulting dependency list, sub-dependencies are greyed out (not strictly required)." +
                     "\n" +
                     "\n<b>Always check for updates to '.latest'</b>\nFind dependencies with the latest version requirement and put them pending download," +
                     " even if some version of each package is already installed." +
@@ -425,7 +425,7 @@ namespace everlaster
                     "\n";
                 const string usage4 =
                     "\n<b>If VaM not latest (>= v1.22)...</b> - inform users that they should update VaM if it's required by your scene" +
-                    " (e.g. you're using VaM's built in lip sync)." +
+                    " (e.g. when using VaM's built in lip sync)." +
                     "\n";
                 const string usage5 =
                     "\nCustom triggers can additionally send information to a UIText in the scene (see the Hub resource and the demo scene)." +
