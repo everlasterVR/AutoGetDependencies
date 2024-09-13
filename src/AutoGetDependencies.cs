@@ -55,6 +55,7 @@ namespace everlaster
         readonly StringBuilder _downloadErrorsSb = new StringBuilder();
         float _progress;
 
+        JSONStorableBool _rescanPackagesOnSelectBool;
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableBool _alwaysCheckForUpdatesBool;
         JSONStorableBool _identifyDisabledPackagesBool;
@@ -171,6 +172,9 @@ namespace everlaster
 
                 _loadedScene = SuperController.singleton.LoadedSceneName;
                 _metaJson = FindLoadedSceneMetaJson();
+
+                _rescanPackagesOnSelectBool = new JSONStorableBool("Rescan packages on select meta json", false);
+                RegisterBool(_rescanPackagesOnSelectBool);
 
                 _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", false, (bool _) => RefindDependencies());
                 RegisterBool(_searchSubDependenciesBool);
@@ -594,9 +598,9 @@ namespace everlaster
             SetProgress(0);
             ShowInfo();
 
-            if(rescan)
+            if(rescan && _rescanPackagesOnSelectBool.val)
             {
-                _infoString.val = "Rescanning packages...";
+                _infoString.val = "Rescanning packages...\n(disable this behavior via trigger)";
                 SuperController.singleton.RescanPackages();
                 _infoString.val = "";
             }
