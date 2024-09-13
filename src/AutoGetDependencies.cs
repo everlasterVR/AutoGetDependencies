@@ -307,18 +307,25 @@ namespace everlaster
                 var uiDynamic = CreateButton("Select meta.json");
                 Color color;
                 if(ColorUtility.TryParseHtmlString(FIND_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
-                uiDynamic.height = 80;
+                uiDynamic.height = 62;
                 _selectMetaJsonAction.RegisterButton(uiDynamic);
             }
+            {
+                var uiDynamic = CreateButton("Scan loaded scene meta.json");
+                Color color;
+                if(ColorUtility.TryParseHtmlString(FIND_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
+                uiDynamic.height = 62;
+                _scanLoadedSceneMetaJson.RegisterButton(uiDynamic);
+            }
 
-            CreateSpacer().height = 12;
+            CreateSpacer().height = 10;
             CreateTriggerMenuButton(_ifDownloadPendingTrigger);
             CreateTriggerMenuButton(_ifDisabledPackagesDetectedTrigger);
             CreateTriggerMenuButton(_ifAllDependenciesInstalledTrigger);
             CreateTriggerMenuButton(_ifVamBundledPackagesMissingTrigger);
             CreateTriggerMenuButton(_ifVamNotLatestTrigger);
 
-            CreateSpacer().height = 6;
+            CreateSpacer().height = 5;
             CreateHeader("2. Download Dependencies");
             if(_isSessionPlugin)
             {
@@ -330,12 +337,17 @@ namespace everlaster
                 var uiDynamic = CreateButton(_downloadAction.name);
                 Color color;
                 if(ColorUtility.TryParseHtmlString(DOWNLOAD_DEPENDENCIES_COLOR, out color)) uiDynamic.buttonColor = color;
-                uiDynamic.height = 80;
+                uiDynamic.height = 62;
                 _downloadAction.RegisterButton(uiDynamic);
             }
 
-            CreateSpacer().height = 12;
-            ConfigurePopup(CreateScrollablePopup(_progressBarChooser), 470);
+            CreateSpacer().height = 10;
+
+            {
+                var popup = CreateScrollablePopup(_progressBarChooser);
+                popup.height = 75;
+                ConfigurePopup(popup, 340);
+            }
 
             UIDynamicSlider progressSlider;
             {
@@ -363,10 +375,10 @@ namespace everlaster
                 _stopDownloadAction.RegisterButton(uiDynamic);
             }
 
-            CreateSpacer().height = 12;
+            CreateSpacer().height = 10;
             CreateTriggerMenuButton(_ifSomePackagesNotInstalledTrigger);
             CreateTriggerMenuButton(_ifNotOnHubPackagesDetectedTrigger);
-            CreateSpacer().height = 12;
+            CreateSpacer().height = 10;
             CreateToggle(logErrorsBool);
 
             _usageButton = CreateTextToggleButton("Usage", ShowUsage);
@@ -482,14 +494,14 @@ namespace everlaster
         {
             var uiDynamic = CreateTextField(new JSONStorableString(Guid.NewGuid().ToString().Substring(0, 4), text));
             var layoutElement = uiDynamic.GetComponent<LayoutElement>();
-            layoutElement.minHeight = 65;
-            layoutElement.preferredHeight = 65;
+            layoutElement.minHeight = 56;
+            layoutElement.preferredHeight = 56;
             uiDynamic.UItext.fontSize = 30;
             uiDynamic.UItext.fontStyle = FontStyle.Bold;
             uiDynamic.backgroundColor = Color.clear;
             var rectT = uiDynamic.UItext.GetComponent<RectTransform>();
             var pos = rectT.anchoredPosition;
-            pos.y = -15;
+            pos.y = -10;
             rectT.anchoredPosition = pos;
             Utils.DisableScroll(uiDynamic);
         }
