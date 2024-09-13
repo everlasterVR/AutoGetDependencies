@@ -495,8 +495,6 @@ namespace everlaster
                 uiTextRectT.sizeDelta = new Vector2(uiTextSize.x - 8, uiTextSize.y - 10);
                 infoField.gameObject.SetActive(false);
             }
-
-            // TODO copy to clipboard button lower right corner
         }
 
         void CreateHeader(string text)
@@ -1909,7 +1907,6 @@ namespace everlaster
             return jc;
         }
 
-        // TODO test
         public override void RestoreFromJSON(
             JSONClass jc,
             bool restorePhysical = true,
@@ -1924,8 +1921,6 @@ namespace everlaster
         }
 
         /* Ensure loading a SubScene file sets the correct value to JSONStorableStringChooser. */
-        // TODO test just always setting subscenePrefix?
-        // TODO should be in LateRestoreFromJSON?
         void FixRestoreFromSubscene(JSONClass jc)
         {
             var subScene = containingAtom.containingSubScene;
