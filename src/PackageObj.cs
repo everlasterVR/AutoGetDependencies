@@ -29,9 +29,11 @@ namespace everlaster
         public HubResourcePackageUI packageUI;
         public HubResourcePackage connectedItem;
 
+        public HubResourcePackage.DownloadQueuedCallback storeQueuedCallback;
         public HubResourcePackage.DownloadStartCallback storeStartCallback;
         public HubResourcePackage.DownloadCompleteCallback storeCompleteCallback;
         public HubResourcePackage.DownloadErrorCallback storeErrorCallback;
+        public bool downloadQueued;
         public bool downloadStarted;
         public bool downloadComplete;
         public string downloadError;
@@ -82,6 +84,8 @@ namespace everlaster
             }
         }
 
+        public void QueueDownload() => packageUI.downloadButton.onClick.Invoke();
+
         public void CleanupCallbacks()
         {
             if(connectedItem == null)
@@ -89,7 +93,9 @@ namespace everlaster
                 return;
             }
 
-            if(storeCompleteCallback != null)
+            if(storeQueuedCallback != null)
+                connectedItem.downloadQueuedCallback -= storeQueuedCallback;
+            if(storeStartCallback != null)
                 connectedItem.downloadStartCallback -= storeStartCallback;
             if(storeCompleteCallback != null)
                 connectedItem.downloadCompleteCallback -= storeCompleteCallback;

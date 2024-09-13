@@ -52,6 +52,7 @@ namespace everlaster
         bool _metaRead;
         bool _pending;
         bool _finished;
+        bool _forceStopped;
         readonly StringBuilder _downloadErrorsSb = new StringBuilder();
         float _progress;
 
@@ -75,7 +76,7 @@ namespace everlaster
         public JSONStorableBool logErrorsBool { get; private set; }
 
         JSONStorableFloat _progressFloat;
-        JSONStorableAction _forceFinishAction;
+        JSONStorableAction _stopDownloadAction;
         JSONStorableAction _navigateToPluginUIAction;
 
         readonly Dictionary<string, TriggerWrapper> _triggers = new Dictionary<string, TriggerWrapper>();
@@ -230,8 +231,8 @@ namespace everlaster
 
                 _progressFloat = new JSONStorableFloat("Download progress (%)", 0, 0, 100);
 
-                _forceFinishAction = new JSONStorableAction("Force finish", ForceFinishCallback);
-                RegisterAction(_forceFinishAction);
+                _stopDownloadAction = new JSONStorableAction("Stop download", () => _forceStopped = true);
+                RegisterAction(_stopDownloadAction);
 
                 _navigateToPluginUIAction = new JSONStorableAction("Open UI", () => this.SelectPluginUI());
                 RegisterAction(_navigateToPluginUIAction);
@@ -615,6 +616,7 @@ namespace everlaster
 
             _pending = false;
             _finished = false;
+            _forceStopped = false;
             _downloadErrorsSb.Clear();
             SetProgress(0);
             ShowInfo();
@@ -917,6 +919,11 @@ namespace everlaster
             }
             else
             {
+                if(_forceStopped)
+                {
+                    sb.Append("<color=#FF0000><b>Downloading was interrupted.</b></color>\n\n");
+                }
+
                 if(!_isLatestVam && _ifVamNotLatestTrigger.eventTrigger.HasActions())
                 {
                     sb.Append("VAM is not in the latest version (>= v1.22).\n\n");
@@ -1179,8 +1186,9 @@ namespace everlaster
             _bindings = new Bindings(nameof(AutoGetDependencies), new List<JSONStorableAction>
             {
                 new JSONStorableAction("SelectMetaJson", () => _selectMetaJsonAction.actionCallback()),
-                new JSONStorableAction("DownloadMissing", DownloadMissingCallback),
-                new JSONStorableAction("ForceFinish", ForceFinishCallback),
+                new JSONStorableAction("ScanLoadedSceneMetaJson", () => _scanLoadedSceneMetaJson.actionCallback()),
+                new JSONStorableAction("DownloadMissing", () => _downloadAction.actionCallback()),
+                new JSONStorableAction("StopDownload", () => _stopDownloadAction.actionCallback()),
                 new JSONStorableAction("OpenUI", () => this.SelectPluginUI()),
             });
         }
@@ -1242,16 +1250,6 @@ namespace everlaster
             var color = sliderHandleImg.color;
             color.a = _tmpAlpha;
             sliderHandleImg.color = color;
-        }
-
-        // TODO test
-        void ForceFinishCallback()
-        {
-            if(_downloadCo != null)
-            {
-                StopCoroutine(_downloadCo);
-                Teardown();
-            }
         }
 
         TriggerWrapper AddTrigger(string name, bool enableSendText = true)
@@ -1594,21 +1592,23 @@ namespace everlaster
                 yield break;
             }
 
-            // setup callbacks and start downloads
+            // setup callbacks
             try
             {
                 foreach(var obj in pendingPackages)
                 {
+                    MVR.Hub.HubResourcePackage.DownloadQueuedCallback queuedCallback = _ => obj.downloadQueued = true;
                     MVR.Hub.HubResourcePackage.DownloadStartCallback startCallback = _ => obj.downloadStarted = true;
                     MVR.Hub.HubResourcePackage.DownloadCompleteCallback completeCallback = (_, __) => obj.downloadComplete = true;
                     MVR.Hub.HubResourcePackage.DownloadErrorCallback errorCallback = (_, e) => obj.downloadError = e;
+                    obj.connectedItem.downloadQueuedCallback += queuedCallback;
                     obj.connectedItem.downloadStartCallback += startCallback;
                     obj.connectedItem.downloadCompleteCallback += completeCallback;
                     obj.connectedItem.downloadErrorCallback += errorCallback;
+                    obj.storeQueuedCallback = queuedCallback;
                     obj.storeStartCallback = startCallback;
                     obj.storeCompleteCallback = completeCallback;
                     obj.storeErrorCallback = errorCallback;
-                    obj.packageUI.downloadButton.onClick.Invoke();
                 }
             }
             catch(Exception e)
@@ -1617,16 +1617,31 @@ namespace everlaster
                 yield break;
             }
 
-            // wait for downloads to complete
+            // start downloads and wait for downloads to complete
             var wait = new WaitForSeconds(0.1f);
+            const int batchSize = 3;
+            float startTime = Time.time;
             while(true)
             {
+                if(_forceStopped)
+                {
+                    Debug.Log("Force finished at batch");
+                    break;
+                }
+
                 try
                 {
                     float sum = 0;
                     bool allDone = true;
+                    int activeDownloads = 0;
                     for(int i = pendingPackages.Count - 1; i >= 0; i--)
                     {
+                        if(_forceStopped)
+                        {
+                            Debug.Log($"Force finished at {i}");
+                            break;
+                        }
+
                         var obj = pendingPackages[i];
                         if(obj.downloadComplete)
                         {
@@ -1642,12 +1657,25 @@ namespace everlaster
                             continue;
                         }
 
+                        if(!obj.downloadQueued)
+                        {
+                            if(activeDownloads >= batchSize)
+                            {
+                                allDone = false;
+                                continue;
+                            }
+
+                            Debug.Log($"[{startTime - Time.time:0.0}s] StartDownload: {obj.name}");
+                            obj.QueueDownload();
+                        }
+
                         if(obj.downloadStarted)
                         {
                             var slider = obj.packageUI.progressSlider;
                             sum += Mathf.InverseLerp(slider.minValue, slider.maxValue, slider.value);
                         }
 
+                        activeDownloads++;
                         allDone = false;
                     }
 
