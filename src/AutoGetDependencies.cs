@@ -407,6 +407,7 @@ namespace everlaster
                     " even if some version of each package is already installed." +
                     "\n" +
                     "\n<b>Identify disabled packages</b>\nIdentify dependencies that are disabled by scanning the AddonPackages folder." +
+                    " Uses up RAM and can take a while if there are lots of packages." +
                     "\n" +
                     "\n<size=28>Custom Triggers</size>" +
                     "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
@@ -421,14 +422,20 @@ namespace everlaster
                     "\n" +
                     "\n<b>If VaM bundled packages missing...</b> executes if any dependencies included in VAM are not found." +
                     " These need to be manually downloaded by running VaM_Updater.exe." +
-                    "\n" +
+                    "\n";
+                const string usage4 =
                     "\n<b>If VaM not latest (>= v1.22)...</b> - inform users that they should update VaM if it's required by your scene" +
                     " (e.g. you're using VaM's built in lip sync)." +
-                    "\n" +
+                    "\n";
+                const string usage5 =
                     "\nCustom triggers can additionally send information to a UIText in the scene (see the Hub resource and the demo scene)." +
                     "\n" +
                     "\n<size=32>2. Download Dependencies</size>" +
-                    "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨" +
+                    "\n¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨";
+                const string usage6 =
+                    "\n<b>Auto-download if pending</b>\nAutomatically start the download process if missing dependencies are detected during the meta.json scan." +
+                    "\n";
+                const string usage7 =
                     "\n<b>Temp auto-enable Hub if needed</b>\nTemporarily enable Hub for users who have it disabled." +
                     " If unchecked, VAM prompts the user to enable Hub before the download can continue." +
                     "\n" +
@@ -444,7 +451,9 @@ namespace everlaster
                     "\n<b>'If 'Not on Hub' packages detected...'</b> executes if any missing dependencies couldn't be downloaded because they were not found on the Hub." +
                     "\n";
 
-                _usageString.val = _isSessionPlugin ? usage1 + usage3 : usage1 + usage2 + usage3;
+                _usageString.val = _isSessionPlugin
+                    ? usage1 + usage3 + usage5 + usage6 + usage7
+                    : usage1 + usage2 + usage3 + usage4 + usage5 + usage7;
                 var usageField = CreateInfoField(_usageString);
                 var rectT = usageField.gameObject.GetComponent<RectTransform>();
                 rectT.pivot = Vector2.zero;
