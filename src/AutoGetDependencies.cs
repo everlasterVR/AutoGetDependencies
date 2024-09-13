@@ -336,11 +336,31 @@ namespace everlaster
 
             CreateSpacer().height = 12;
             ConfigurePopup(CreateScrollablePopup(_progressBarChooser), 470);
+
+            UIDynamicSlider progressSlider;
             {
-                var uiDynamic = CreateSlider(_progressFloat);
-                uiDynamic.valueFormat = "F0";
-                uiDynamic.HideButtons();
-                uiDynamic.SetInteractable(false);
+                progressSlider = CreateSlider(_progressFloat);
+                progressSlider.valueFormat = "F0";
+                progressSlider.HideButtons();
+                progressSlider.SetInteractable(false);
+                var sliderT = (RectTransform) progressSlider.gameObject.transform.Find("Slider");
+                var pos = sliderT.anchoredPosition;
+                var size = sliderT.sizeDelta;
+                sliderT.anchoredPosition = new Vector2(pos.x - 30, pos.y);
+                sliderT.sizeDelta = new Vector2(size.x - 60, size.y);
+            }
+            {
+                var buttonT = Instantiate(manager.configurableButtonPrefab, progressSlider.transform);
+                var uiDynamic = buttonT.GetComponent<UIDynamicButton>();
+                uiDynamic.label = "Stop";
+                uiDynamic.buttonText.fontSize = 24;
+                var layoutElement = buttonT.GetComponent<LayoutElement>();
+                DestroyImmediate(layoutElement);
+                var rectT = buttonT.GetComponent<RectTransform>();
+                rectT.pivot = Vector2.zero;
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Right, 8, 64);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Bottom, 8, 40);
+                _stopDownloadAction.RegisterButton(uiDynamic);
             }
 
             CreateSpacer().height = 12;
