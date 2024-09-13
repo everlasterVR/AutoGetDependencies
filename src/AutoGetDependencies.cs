@@ -1659,12 +1659,10 @@ namespace everlaster
             // start downloads and wait for downloads to complete
             var wait = new WaitForSeconds(0.1f);
             const int batchSize = 3;
-            float startTime = Time.time;
             while(true)
             {
                 if(_forceStopped)
                 {
-                    Debug.Log("Force finished at batch");
                     break;
                 }
 
@@ -1677,7 +1675,6 @@ namespace everlaster
                     {
                         if(_forceStopped)
                         {
-                            Debug.Log($"Force finished at {i}");
                             break;
                         }
 
@@ -1704,7 +1701,6 @@ namespace everlaster
                                 continue;
                             }
 
-                            Debug.Log($"[{startTime - Time.time:0.0}s] StartDownload: {obj.name}");
                             obj.QueueDownload();
                         }
 
