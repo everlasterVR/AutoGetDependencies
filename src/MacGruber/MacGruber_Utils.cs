@@ -82,7 +82,7 @@ namespace MacGruber
             Loaded = true;
         }
 
-        IEnumerable LoadAsset(string assetBundleName, string assetName, Action<RectTransform> assign)
+        static IEnumerable LoadAsset(string assetBundleName, string assetName, Action<RectTransform> assign)
         {
             var request = AssetBundleManager.LoadAssetAsync(assetBundleName, assetName, typeof(GameObject));
             if(request == null)
@@ -265,10 +265,10 @@ namespace MacGruber
         {
             if(jc.HasKey(Name))
             {
-                var tc = jc[Name].AsObject;
-                if(tc != null)
+                var triggerJson = jc[Name].AsObject;
+                if(triggerJson != null)
                 {
-                    base.RestoreFromJSON(tc, subScenePrefix, isMerge);
+                    base.RestoreFromJSON(triggerJson, subScenePrefix, isMerge);
                 }
             }
             else if(setMissingToDefault)

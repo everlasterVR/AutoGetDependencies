@@ -43,8 +43,8 @@ namespace everlaster
         {
             _script = script;
             eventTrigger = new EventTrigger(script, name);
-            eventTrigger.onCloseTriggerActionsPanel += UpdateButton;
-            UpdateButton();
+            eventTrigger.onCloseTriggerActionsPanel += UpdateButtonLabel;
+            UpdateButtonLabel();
             this.label = label;
         }
 
@@ -59,7 +59,7 @@ namespace everlaster
             _script.RegisterAction(action);
         }
 
-        public void UpdateButton()
+        public void UpdateButtonLabel()
         {
             if(button == null)
             {
@@ -70,7 +70,7 @@ namespace everlaster
             int count = eventTrigger.GetDiscreteActionsStart().Count;
             if(count > 0)
             {
-                newLabel += $" <b>({count})</b>";
+                newLabel += $" ({count})";
             }
 
             button.label = newLabel;
@@ -241,20 +241,13 @@ namespace everlaster
         {
             try
             {
-                if(jc.HasKey(eventTrigger.Name))
+                eventTrigger.RestoreFromJSON(jc, subscenePrefix, mergeRestore, setMissingToDefault);
+                if(_script.logErrorsBool.val)
                 {
-                    eventTrigger.RestoreFromJSON(jc[eventTrigger.Name].AsObject ?? new JSONClass(), subscenePrefix, mergeRestore);
-                    if(_script.logErrorsBool.val)
-                    {
-                        ValidateTrigger();
-                    }
-                }
-                else if(setMissingToDefault)
-                {
-                    eventTrigger.RestoreFromJSON(new JSONClass());
+                    ValidateTrigger();
                 }
 
-                UpdateButton();
+                UpdateButtonLabel();
             }
             catch(Exception e)
             {

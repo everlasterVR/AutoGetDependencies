@@ -362,16 +362,15 @@ namespace everlaster
                 sliderT.sizeDelta = new Vector2(size.x - 60, size.y);
             }
             {
-                var buttonT = Instantiate(manager.configurableButtonPrefab, progressSlider.transform);
+                var buttonT = (RectTransform) Instantiate(manager.configurableButtonPrefab, progressSlider.transform);
                 var uiDynamic = buttonT.GetComponent<UIDynamicButton>();
                 uiDynamic.label = "Stop";
                 uiDynamic.buttonText.fontSize = 24;
                 var layoutElement = buttonT.GetComponent<LayoutElement>();
                 DestroyImmediate(layoutElement);
-                var rectT = buttonT.GetComponent<RectTransform>();
-                rectT.pivot = Vector2.zero;
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Right, 8, 64);
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Bottom, 8, 40);
+                buttonT.pivot = Vector2.zero;
+                buttonT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Right, 8, 64);
+                buttonT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Bottom, 8, 40);
                 _stopDownloadAction.RegisterButton(uiDynamic);
             }
 
@@ -484,7 +483,7 @@ namespace everlaster
 
             {
                 var infoField = CreateInfoField(_infoString);
-                var rectT = infoField.gameObject.GetComponent<RectTransform>();
+                var rectT = infoField.GetComponent<RectTransform>();
                 rectT.pivot = Vector2.zero;
                 rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 85, 1145);
                 rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
@@ -546,7 +545,7 @@ namespace everlaster
             pos.x += 15;
             textRectT.anchoredPosition = pos;
             trigger.button = uiDynamic;
-            trigger.UpdateButton();
+            trigger.UpdateButtonLabel();
         }
 
         void ConfigurePopup(UIDynamicPopup uiDynamic, float height, float offsetX = 0, bool upwards = false)
@@ -581,15 +580,14 @@ namespace everlaster
 
         UIDynamicButton CreateTextToggleButton(string label, UnityAction action)
         {
-            var buttonT = Instantiate(manager.configurableButtonPrefab, UITransform);
+            var buttonT = (RectTransform) Instantiate(manager.configurableButtonPrefab, UITransform);
             var uiDynamic = buttonT.GetComponent<UIDynamicButton>();
             uiDynamic.label = label;
             uiDynamic.buttonText.fontSize = 24;
             uiDynamic.AddListener(action);
-            var rectT = buttonT.GetComponent<RectTransform>();
-            rectT.pivot = Vector2.zero;
-            rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 36);
-            rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 445, 100);
+            buttonT.pivot = Vector2.zero;
+            buttonT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 36);
+            buttonT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 445, 100);
             var textRectT = uiDynamic.buttonText.GetComponent<RectTransform>();
             var pos = textRectT.anchoredPosition;
             textRectT.anchoredPosition = new Vector2(pos.x, pos.y + 2);
@@ -1304,12 +1302,11 @@ namespace everlaster
                     trigger.uiTextChooser = chooser;
                 }
 
-                trigger.eventTrigger.onInitPanel += panel =>
+                trigger.eventTrigger.onInitPanel += triggerActionsPanel =>
                 {
-                    var popupT = Instantiate(manager.configurableScrollablePopupPrefab, panel);
-                    var popupRectT = popupT.GetComponent<RectTransform>();
-                    popupRectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 62, 120f);
-                    popupRectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Right, 15f, 545f);
+                    var popupT = (RectTransform) Instantiate(manager.configurableScrollablePopupPrefab, triggerActionsPanel);
+                    popupT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 62, 120f);
+                    popupT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Right, 15f, 545f);
                     var uiDynamic = popupT.GetComponent<UIDynamicPopup>();
                     uiDynamic.height = 100f;
                     uiDynamic.labelTextColor = Color.white;

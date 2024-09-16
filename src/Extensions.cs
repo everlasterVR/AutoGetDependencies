@@ -132,7 +132,7 @@ namespace everlaster
             var uiDynamicT = uiDynamic.gameObject.transform;
 
             {
-                var sliderRectT = uiDynamicT.Find("Slider").GetComponent<RectTransform>();
+                var sliderRectT = (RectTransform) uiDynamicT.Find("Slider");
                 var pos = sliderRectT.anchoredPosition;
                 sliderRectT.anchoredPosition = new Vector2(pos.x, pos.y - 22.5f);
             }
