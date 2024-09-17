@@ -477,7 +477,7 @@ namespace everlaster
                 rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 68);
                 rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
                 _pathString.dynamicText = uiDynamic;
-                Utils.DisableScroll(uiDynamic);
+                uiDynamic.DisableScroll();
                 pathFieldT.gameObject.SetActive(false);
             }
 
@@ -509,7 +509,7 @@ namespace everlaster
             var pos = rectT.anchoredPosition;
             pos.y = -10;
             rectT.anchoredPosition = pos;
-            Utils.DisableScroll(uiDynamic);
+            uiDynamic.DisableScroll();
         }
 
         void CreateTriggerMenuButton(TriggerWrapper trigger)

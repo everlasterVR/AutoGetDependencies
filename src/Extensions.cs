@@ -15,6 +15,34 @@ using UnityEngine.UI;
  */
 namespace everlaster
 {
+    static class AtomExtensions
+    {
+        public static IEnumerator SelectTabCo(this Atom atom, string tabName, Action postAction = null)
+        {
+            if(SuperController.singleton.gameMode != SuperController.GameMode.Edit)
+            {
+                SuperController.singleton.gameMode = SuperController.GameMode.Edit;
+            }
+
+            SuperController.singleton.SelectController(atom.mainController, false, false);
+            SuperController.singleton.ShowMainHUDAuto();
+
+            float timeout = Time.unscaledTime + 1;
+            while(Time.unscaledTime < timeout)
+            {
+                yield return null;
+                var selector = atom.gameObject.GetComponentInChildren<UITabSelector>();
+                if(selector)
+                {
+                    selector.SetActiveTab(tabName);
+                    yield return null;
+                    postAction?.Invoke();
+                    break;
+                }
+            }
+        }
+    }
+
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     static class IEnumerableExtensions
     {
@@ -49,7 +77,7 @@ namespace everlaster
                 yield break;
             }
 
-            yield return SelectAtomTabCo(script.containingAtom, "Plugins");
+            yield return script.containingAtom.SelectTabCo("Plugins");
 
             float timeout = Time.unscaledTime + 1;
             while(Time.unscaledTime < timeout)
@@ -76,31 +104,6 @@ namespace everlaster
                     script.UITransform.gameObject.SetActive(true);
                     postAction?.Invoke();
                     yield break;
-                }
-            }
-        }
-
-        static IEnumerator SelectAtomTabCo(Atom atom, string tabName, Action postAction = null)
-        {
-            if(SuperController.singleton.gameMode != SuperController.GameMode.Edit)
-            {
-                SuperController.singleton.gameMode = SuperController.GameMode.Edit;
-            }
-
-            SuperController.singleton.SelectController(atom.mainController, false, false);
-            SuperController.singleton.ShowMainHUDAuto();
-
-            float timeout = Time.unscaledTime + 1;
-            while(Time.unscaledTime < timeout)
-            {
-                yield return null;
-                var selector = atom.gameObject.GetComponentInChildren<UITabSelector>();
-                if(selector)
-                {
-                    selector.SetActiveTab(tabName);
-                    yield return null;
-                    postAction?.Invoke();
-                    break;
                 }
             }
         }
@@ -173,6 +176,24 @@ namespace everlaster
 
             var valueInputField = transform.Find("ValueInputField");
             valueInputField.GetComponent<InputField>().interactable = interactable;
+        }
+    }
+
+    [SuppressMessage("ReSharper", "UnusedMember.Global")]
+    [SuppressMessage("ReSharper", "UnusedType.Global")]
+    static class UIDynamicTextFieldExtensions
+    {
+        public static void DisableScroll(this UIDynamicTextField uiDynamic)
+        {
+            var scrollViewT = uiDynamic.transform.Find("Scroll View");
+            var scrollBarHorizontalT = scrollViewT.Find("Scrollbar Horizontal");
+            if(scrollBarHorizontalT != null)
+            {
+                UnityEngine.Object.Destroy(scrollBarHorizontalT.gameObject);
+            }
+
+            var scrollRect = scrollViewT.GetComponent<ScrollRect>();
+            scrollRect.vertical = false;
         }
     }
 }
