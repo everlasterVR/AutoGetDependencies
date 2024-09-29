@@ -485,7 +485,7 @@ namespace everlaster
                 var infoField = CreateInfoField(_infoString);
                 var rectT = infoField.GetComponent<RectTransform>();
                 rectT.pivot = Vector2.zero;
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 85, 1145);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 85, 1130);
                 rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
                 var uiTextRectT = infoField.UItext.GetComponent<RectTransform>();
                 var uiTextPos = uiTextRectT.anchoredPosition;
@@ -493,6 +493,30 @@ namespace everlaster
                 var uiTextSize = uiTextRectT.sizeDelta;
                 uiTextRectT.sizeDelta = new Vector2(uiTextSize.x - 8, uiTextSize.y - 10);
                 infoField.gameObject.SetActive(false);
+            }
+            {
+                var parent = (RectTransform) _infoString.dynamicText.transform;
+                var buttonT = (RectTransform) Instantiate(manager.configurableButtonPrefab, parent);
+                var uiDynamic = buttonT.GetComponent<UIDynamicButton>();
+                uiDynamic.label = "Copy to clipboard";
+                uiDynamic.buttonText.fontSize = 24;
+                uiDynamic.AddListener(() =>
+                {
+                    for(int i = 0; i < _infoSbAlt.Length; i++)
+                    {
+                        if(_infoSbAlt[i] == '\u00A0')
+                        {
+                            _infoSbAlt[i] = ' ';
+                        }
+                    }
+
+                    GUIUtility.systemCopyBuffer = _pathString.val + "\n\n" + _infoSbAlt;
+                });
+                var layoutElement = buttonT.GetComponent<LayoutElement>();
+                DestroyImmediate(layoutElement);
+                buttonT.pivot = Vector2.zero;
+                buttonT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Bottom, -16, 32);
+                buttonT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, (parent.rect.size.x - 300) / 2, 300);
             }
         }
 
@@ -931,6 +955,9 @@ namespace everlaster
             trigger.SendText(packages.Select(obj => obj.name).ToPrettyString());
         }
 
+        StringBuilder _infoSb = new StringBuilder();
+        StringBuilder _infoSbAlt = new StringBuilder();
+
         void UpdateInfo()
         {
             if(!_uiCreated || !(_pending || _finished))
@@ -942,87 +969,87 @@ namespace everlaster
             if(_pending) _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Overflow;
             else if(_finished) _infoString.dynamicText.UItext.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-            var sb = new StringBuilder();
-            var sbAlt = new StringBuilder();
+            _infoSb.Clear();
+            _infoSbAlt.Clear();
 
             if(_packages.Count == 0)
             {
-                sb.Append("Package has no dependencies.\n\n");
-                sbAlt.Append("Package has no dependencies.\n\n");
+                _infoSb.Append("Package has no dependencies.\n\n");
+                _infoSbAlt.Append("Package has no dependencies.\n\n");
             }
             else if(_packages.TrueForAll(obj => obj.existsAndIsValid) && (_finished || _updateRequiredPackages.Count == 0))
             {
-                AppendPackagesInfo(sb, sbAlt, "All dependencies are installed!", _okColor, _packages);
+                AppendPackagesInfo(_infoSb, _infoSbAlt, "All dependencies are installed!", _okColor, _packages);
             }
             else
             {
                 if(_forceStopped)
                 {
-                    sb.Append("<color=#FF0000><b>Downloading was interrupted.</b></color>\n\n");
+                    _infoSb.Append("<color=#FF0000><b>Downloading was interrupted.</b></color>\n\n");
                 }
 
                 if(!_isLatestVam && _ifVamNotLatestTrigger.eventTrigger.HasActions())
                 {
-                    sb.Append("VAM is not in the latest version (>= v1.22).\n\n");
-                    sbAlt.Append("VAM is not in the latest version (>= v1.22).\n\n");
+                    _infoSb.Append("VAM is not in the latest version (>= v1.22).\n\n");
+                    _infoSbAlt.Append("VAM is not in the latest version (>= v1.22).\n\n");
                 }
 
                 if(_missingVamBundledPackages.Count > 0)
                 {
-                    AppendPackagesInfo(sb, sbAlt, "Missing VAM bundled packages:", _errorColor, _missingVamBundledPackages);
+                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Missing VAM bundled packages:", _errorColor, _missingVamBundledPackages);
                 }
 
                 if(_versionErrorPackages.Count > 0)
                 {
-                    AppendPackagesInfo(sb, sbAlt, "Version error in meta.json:", _errorColor, _versionErrorPackages);
+                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Version error in meta.json:", _errorColor, _versionErrorPackages);
                 }
 
                 if(_disabledPackages.Count > 0)
                 {
-                    AppendPackagesInfo(sb, sbAlt, "Disabled:", _errorColor, _disabledPackages);
+                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Disabled:", _errorColor, _disabledPackages);
                 }
 
                 if(_pending)
                 {
-                    AppendPackagesInfo(sb, sbAlt, "Missing, download required:", _errorColor, _missingPackages);
-                    AppendPackagesInfo(sb, sbAlt, "Installed, check for update required:", _updateRequiredColor, _updateRequiredPackages);
-                    AppendPackagesInfo(sb, sbAlt, "Installed, no update required:", _okColor, _installedPackages);
+                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Missing, download required:", _errorColor, _missingPackages);
+                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Installed, check for update required:", _updateRequiredColor, _updateRequiredPackages);
+                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Installed, no update required:", _okColor, _installedPackages);
                 }
                 else if(_finished)
                 {
                     if(_notOnHubPackages.Count > 0)
                     {
-                        AppendPackagesInfo(sb, sbAlt, "Packages not on Hub:", _errorColor, _notOnHubPackages);
+                        AppendPackagesInfo(_infoSb, _infoSbAlt, "Packages not on Hub:", _errorColor, _notOnHubPackages);
                     }
                     if(_downloadErrorsSb.Length > 0)
                     {
-                        sb.AppendFormat("<size=30><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
-                        sb.Append(_downloadErrorsSb);
-                        sb.Append("\n\n");
-                        sbAlt.Append("Errors during download:\n\n");
-                        sbAlt.Append(_downloadErrorsSb);
-                        sbAlt.Append("\n\n");
+                        _infoSb.AppendFormat("<size=30><color=#{0}><b>Errors during download:</b></color></size>\n\n", _errorColor);
+                        _infoSb.Append(_downloadErrorsSb);
+                        _infoSb.Append("\n\n");
+                        _infoSbAlt.Append("Errors during download:\n\n");
+                        _infoSbAlt.Append(_downloadErrorsSb);
+                        _infoSbAlt.Append("\n\n");
                     }
-                    AppendPackagesInfo(sb, sbAlt, "Installed:", _okColor, _packages.Where(obj => obj.existsAndIsValid).ToList());
+                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Installed:", _okColor, _packages.Where(obj => obj.existsAndIsValid).ToList());
                 }
             }
 
             try
             {
-                if(sb.Length > 16000)
+                if(_infoSb.Length > 16000)
                 {
-                    if(sbAlt.Length > 16000)
+                    if(_infoSbAlt.Length > 16000)
                     {
                         const string truncated = "\n\n(too long, truncated)\n\n";
-                        sbAlt.Length = 16000 - truncated.Length;
-                        sbAlt.Append(truncated);
+                        _infoSbAlt.Length = 16000 - truncated.Length;
+                        _infoSbAlt.Append(truncated);
                     }
 
-                    _infoString.val = sbAlt.ToString();
+                    _infoString.val = _infoSbAlt.ToString();
                 }
                 else
                 {
-                    _infoString.val = sb.ToString();
+                    _infoString.val = _infoSb.ToString();
                 }
             }
             catch(Exception e)
