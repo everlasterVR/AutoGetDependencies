@@ -950,7 +950,7 @@ namespace everlaster
                 sb.Append("Package has no dependencies.\n\n");
                 sbAlt.Append("Package has no dependencies.\n\n");
             }
-            else if(_packages.TrueForAll(obj => obj.existsAndIsValid))
+            else if(_packages.TrueForAll(obj => obj.existsAndIsValid) && (_finished || _updateRequiredPackages.Count == 0))
             {
                 AppendPackagesInfo(sb, sbAlt, "All dependencies are installed!", _okColor, _packages);
             }
