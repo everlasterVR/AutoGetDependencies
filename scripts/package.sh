@@ -18,10 +18,10 @@ prepare_directories() {
   mkdir -p "$work_dir"
   resource_dir="$work_dir/Custom/Scripts/everlaster/$plugin_name"
   mkdir -p "$resource_dir"
-  cp meta.json "$work_dir/"
 }
 
 package_files() {
+  cp meta.json "$work_dir/"
   file="$plugin_name.cslist"
   cp "$file" "$resource_dir/"
   while IFS= read -r line; do
