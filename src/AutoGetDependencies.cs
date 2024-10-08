@@ -518,6 +518,8 @@ namespace everlaster
                 buttonT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Bottom, -16, 32);
                 buttonT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, (parent.rect.size.x - 300) / 2, 300);
             }
+
+            _showingUsage = true;
         }
 
         void CreateHeader(string text)
@@ -547,18 +549,9 @@ namespace everlaster
             uiDynamic.AddListener(() =>
             {
                 trigger.customTrigger.OpenPanel();
-                if(_usageString.dynamicText != null)
-                {
-                    _usageString.dynamicText.gameObject.SetActive(false);
-                }
+                HideUsageAndInfo();
             });
-            trigger.RegisterOnCloseCallback(() =>
-            {
-                if(_usageString.dynamicText != null)
-                {
-                    _usageString.dynamicText.gameObject.SetActive(true);
-                }
-            });
+            trigger.RegisterOnCloseCallback(SyncShowUsageOrInfo);
             var textComponent = uiDynamic.buttonText;
             textComponent.resizeTextForBestFit = true;
             textComponent.resizeTextMinSize = 24;
@@ -634,6 +627,8 @@ namespace everlaster
             return uiDynamic;
         }
 
+        bool _showingUsage;
+
         void ShowUsage()
         {
             if(!_uiCreated)
@@ -641,8 +636,13 @@ namespace everlaster
                 return;
             }
 
+            _showingUsage = true;
             _usageButton.gameObject.SetActive(false);
-            _backButton.gameObject.SetActive(true);
+            if(_metaRead)
+            {
+                _backButton.gameObject.SetActive(true);
+            }
+
             _pathString.dynamicText.gameObject.SetActive(false);
             _infoString.dynamicText.gameObject.SetActive(false);
             _usageString.dynamicText.gameObject.SetActive(true);
@@ -655,11 +655,33 @@ namespace everlaster
                 return;
             }
 
+            _showingUsage = false;
             _usageButton.gameObject.SetActive(true);
             _backButton.gameObject.SetActive(false);
             _usageString.dynamicText.gameObject.SetActive(false);
             _pathString.dynamicText.gameObject.SetActive(true);
             _infoString.dynamicText.gameObject.SetActive(true);
+        }
+
+        void SyncShowUsageOrInfo()
+        {
+            if(_showingUsage)
+            {
+                ShowUsage();
+            }
+            else
+            {
+                ShowInfo();
+            }
+        }
+
+        void HideUsageAndInfo()
+        {
+            _usageButton.gameObject.SetActive(false);
+            _backButton.gameObject.SetActive(false);
+            _usageString.dynamicText.gameObject.SetActive(false);
+            _pathString.dynamicText.gameObject.SetActive(false);
+            _infoString.dynamicText.gameObject.SetActive(false);
         }
 
         void FindDependenciesCallback(bool rescan = true)
