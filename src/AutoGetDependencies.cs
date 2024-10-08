@@ -60,6 +60,7 @@ namespace everlaster
         JSONStorableBool _searchSubDependenciesBool;
         JSONStorableBool _alwaysCheckForUpdatesBool;
         JSONStorableBool _identifyDisabledPackagesBool;
+        JSONStorableAction _recheckDependenciesAction;
         JSONStorableAction _scanLoadedSceneMetaJson;
         JSONStorableAction _selectMetaJsonAction;
         JSONStorableUrl _selectMetaJsonUrl;
@@ -178,14 +179,17 @@ namespace everlaster
                 _rescanPackagesOnSelectBool = new JSONStorableBool("Rescan packages on select meta json", false);
                 RegisterBool(_rescanPackagesOnSelectBool);
 
-                _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", false, (bool _) => RefindDependencies());
+                _searchSubDependenciesBool = new JSONStorableBool("Search sub-dependencies", false, (bool _) => RecheckDependencies());
                 RegisterBool(_searchSubDependenciesBool);
 
-                _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false, (bool _) => RefindDependencies());
+                _alwaysCheckForUpdatesBool = new JSONStorableBool("Always check for updates to '.latest'", false, (bool _) => RecheckDependencies());
                 RegisterBool(_alwaysCheckForUpdatesBool);
 
-                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", false, (bool _) => RefindDependencies());
+                _identifyDisabledPackagesBool = new JSONStorableBool("Identify disabled packages", false, (bool _) => RecheckDependencies());
                 RegisterBool(_identifyDisabledPackagesBool);
+
+                _recheckDependenciesAction = new JSONStorableAction("Recheck dependencies", RecheckDependencies);
+                RegisterAction(_recheckDependenciesAction);
 
                 _selectMetaJsonUrl = new JSONStorableUrl("_selectMetaJsonUrl", "", "json", "AddonPackages")
                 {
@@ -269,7 +273,7 @@ namespace everlaster
             }
         }
 
-        void RefindDependencies()
+        void RecheckDependencies()
         {
             if(_metaJson == null || !_metaRead)
             {
