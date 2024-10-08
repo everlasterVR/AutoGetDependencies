@@ -52,7 +52,7 @@ namespace everlaster
 
         public void RegisterCopyToClipboardAction()
         {
-            var action = new JSONStorableAction($"{eventTrigger.Name}: Copy to clipboard", () =>
+            var action = new JSONStorableAction($"{eventTrigger.name}: Copy to clipboard", () =>
             {
                 if(_sendToString != null) GUIUtility.systemCopyBuffer = _sendToString.val;
             });
@@ -210,7 +210,7 @@ namespace everlaster
 
             if(error != null && _script.logErrorsBool.val)
             {
-                _script.logBuilder.Error($"{eventTrigger.Name}: {error}");
+                _script.logBuilder.Error($"{eventTrigger.name}: {error}");
                 return false;
             }
 
@@ -271,7 +271,7 @@ namespace everlaster
                 var triggerJson = eventTrigger.GetJSON(subScenePrefix);
                 triggerJson.Remove("transitionActions");
                 triggerJson.Remove("endActions");
-                jc[eventTrigger.Name] = triggerJson;
+                jc[eventTrigger.name] = triggerJson;
             }
         }
     }

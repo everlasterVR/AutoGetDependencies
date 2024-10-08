@@ -955,8 +955,8 @@ namespace everlaster
             trigger.SendText(packages.Select(obj => obj.name).ToPrettyString());
         }
 
-        StringBuilder _infoSb = new StringBuilder();
-        StringBuilder _infoSbAlt = new StringBuilder();
+        readonly StringBuilder _infoSb = new StringBuilder();
+        readonly StringBuilder _infoSbAlt = new StringBuilder();
 
         void UpdateInfo()
         {
