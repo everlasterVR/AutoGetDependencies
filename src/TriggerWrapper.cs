@@ -1,4 +1,4 @@
-﻿using MacGruber;
+﻿using MacGruber_Utils;
 using SimpleJSON;
 using System;
 using System.Collections;
@@ -17,7 +17,9 @@ namespace everlaster
     sealed class TriggerWrapper
     {
         readonly AutoGetDependencies _script;
-        public readonly EventTrigger eventTrigger;
+        readonly EventTrigger _eventTrigger;
+        readonly DualEventTrigger _dualEventTrigger;
+        public readonly CustomTrigger customTrigger;
         public readonly string label;
 
         TextAnchor _storeTextAlignment;
@@ -42,17 +44,29 @@ namespace everlaster
         public TriggerWrapper(AutoGetDependencies script, string name, string label)
         {
             _script = script;
-            eventTrigger = new EventTrigger(script, name);
-            eventTrigger.onCloseTriggerActionsPanel += UpdateButtonLabel;
+            _eventTrigger = new EventTrigger(script, name);
+            _eventTrigger.onCloseTriggerActionsPanel += UpdateButtonLabel;
+            customTrigger = _eventTrigger;
             UpdateButtonLabel();
             this.label = label;
         }
 
-        public void RegisterOnCloseCallback(Trigger.OnCloseTriggerActionsPanel callback) => eventTrigger.onCloseTriggerActionsPanel += callback;
+        public TriggerWrapper(AutoGetDependencies script, string name, string label, string eventAName, string eventBName)
+        {
+            _script = script;
+            _dualEventTrigger = new DualEventTrigger(script, name, eventAName, eventBName);
+            _dualEventTrigger.onCloseTriggerActionsPanel += UpdateButtonLabel;
+            customTrigger = _dualEventTrigger;
+            UpdateButtonLabel();
+            this.label = label;
+        }
+
+        public void RegisterOnCloseCallback(Trigger.OnCloseTriggerActionsPanel callback) =>
+            customTrigger.onCloseTriggerActionsPanel += callback;
 
         public void RegisterCopyToClipboardAction()
         {
-            var action = new JSONStorableAction($"{eventTrigger.name}: Copy to clipboard", () =>
+            var action = new JSONStorableAction($"{customTrigger.name}: Copy to clipboard", () =>
             {
                 if(_sendToString != null) GUIUtility.systemCopyBuffer = _sendToString.val;
             });
@@ -66,14 +80,21 @@ namespace everlaster
                 return;
             }
 
-            string newLabel = label;
-            int count = eventTrigger.GetDiscreteActionsStart().Count;
-            if(count > 0)
+            int count = 0;
+
+            var discreteActionsStart = customTrigger.GetDiscreteActionsStart();
+            if(discreteActionsStart != null)
             {
-                newLabel += $" ({count})";
+                count += discreteActionsStart.Count;
             }
 
-            button.label = newLabel;
+            var discreteActionsEnd = customTrigger.GetDiscreteActionsEnd();
+            if(discreteActionsEnd != null)
+            {
+                count += discreteActionsEnd.Count;
+            }
+
+            button.label = label + (count > 0 ? $" ({count})" : "");
         }
 
         public void SelectUITextCallback(string option, List<Atom> uiTexts)
@@ -139,18 +160,16 @@ namespace everlaster
         {
             try
             {
+                if(_eventTrigger == null)
+                {
+                    _script.logBuilder.Debug("Trigger: eventTrigger is null");
+                    return;
+                }
+
                 if(ValidateTrigger())
                 {
-                    eventTrigger.Trigger();
-                    if(button != null)
-                    {
-                        if(_flashButtonCo != null)
-                        {
-                            _script.StopCoroutine(_flashButtonCo);
-                        }
-
-                        _flashButtonCo = _script.StartCoroutine(FlashButton());
-                    }
+                    _eventTrigger.Trigger();
+                    FlashButton();
                 }
             }
             catch(Exception e)
@@ -159,7 +178,64 @@ namespace everlaster
             }
         }
 
-        IEnumerator FlashButton()
+        public void TriggerA()
+        {
+            try
+            {
+                if(_dualEventTrigger == null)
+                {
+                    _script.logBuilder.Debug("TriggerA: dualEventTrigger is null");
+                    return;
+                }
+
+                if(ValidateTriggerA())
+                {
+                    _dualEventTrigger.TriggerA();
+                    FlashButton();
+                }
+            }
+            catch(Exception e)
+            {
+                _script.logBuilder.Exception(e);
+            }
+        }
+
+        public void TriggerB()
+        {
+            try
+            {
+                if(_dualEventTrigger == null)
+                {
+                    _script.logBuilder.Debug("TriggerB: dualEventTrigger is null");
+                    return;
+                }
+
+                if(ValidateTriggerB())
+                {
+                    _dualEventTrigger.TriggerB();
+                    FlashButton();
+                }
+            }
+            catch(Exception e)
+            {
+                _script.logBuilder.Exception(e);
+            }
+        }
+
+        void FlashButton()
+        {
+            if(button != null)
+            {
+                if(_flashButtonCo != null)
+                {
+                    _script.StopCoroutine(_flashButtonCo);
+                }
+
+                _flashButtonCo = _script.StartCoroutine(FlashButtonCo());
+            }
+        }
+
+        IEnumerator FlashButtonCo()
         {
             button.buttonColor = Color.green;
             yield return new WaitForSeconds(0.50f);
@@ -178,8 +254,49 @@ namespace everlaster
 
         bool ValidateTrigger()
         {
+            string error = DiscreteActionsValidationResult(_eventTrigger.GetDiscreteActionsStart());
+            if(error != null && _script.logErrorsBool.val)
+            {
+                _script.logBuilder.Error($"{_eventTrigger.name}: {error}");
+                return false;
+            }
+
+            return true;
+        }
+
+        bool ValidateTriggerA()
+        {
+            string error = DiscreteActionsValidationResult(_dualEventTrigger.GetDiscreteActionsStart());
+            if(error != null && _script.logErrorsBool.val)
+            {
+                _script.logBuilder.Error($"{_dualEventTrigger.name}: {error}");
+                return false;
+            }
+
+            return true;
+        }
+
+        bool ValidateTriggerB()
+        {
+            string error = DiscreteActionsValidationResult(_dualEventTrigger.GetDiscreteActionsEnd());
+            if(error != null && _script.logErrorsBool.val)
+            {
+                _script.logBuilder.Error($"{_dualEventTrigger.name}: {error}");
+                return false;
+            }
+
+            return true;
+        }
+
+        static string DiscreteActionsValidationResult(List<TriggerActionDiscrete> actions)
+        {
+            if(actions == null)
+            {
+                return null;
+            }
+
             string error = null;
-            foreach(var action in eventTrigger.GetDiscreteActionsStart())
+            foreach(var action in actions)
             {
                 if(action.receiverAtom == null)
                 {
@@ -208,13 +325,7 @@ namespace everlaster
                 }
             }
 
-            if(error != null && _script.logErrorsBool.val)
-            {
-                _script.logBuilder.Error($"{eventTrigger.name}: {error}");
-                return false;
-            }
-
-            return true;
+            return error;
         }
 
         public void SendText(string val)
@@ -241,10 +352,18 @@ namespace everlaster
         {
             try
             {
-                eventTrigger.RestoreFromJSON(jc, subscenePrefix, mergeRestore, setMissingToDefault);
+                customTrigger.RestoreFromJSON(jc, subscenePrefix, mergeRestore, setMissingToDefault);
                 if(_script.logErrorsBool.val)
                 {
-                    ValidateTrigger();
+                    if(_eventTrigger != null)
+                    {
+                        ValidateTrigger();
+                    }
+                    else if(_dualEventTrigger != null)
+                    {
+                        ValidateTriggerA();
+                        ValidateTriggerB();
+                    }
                 }
 
                 UpdateButtonLabel();
@@ -257,7 +376,7 @@ namespace everlaster
 
         public void Destroy()
         {
-            eventTrigger.OnRemove();
+            customTrigger.OnRemove();
             if(_sendToText != null)
             {
                 RestoreUIText();
@@ -266,12 +385,9 @@ namespace everlaster
 
         public void StoreJSON(JSONClass jc, string subScenePrefix)
         {
-            if(eventTrigger.HasActions())
+            if(customTrigger.HasActions())
             {
-                var triggerJson = eventTrigger.GetJSON(subScenePrefix);
-                triggerJson.Remove("transitionActions");
-                triggerJson.Remove("endActions");
-                jc[eventTrigger.name] = triggerJson;
+                jc[customTrigger.name] = customTrigger.GetJSON(subScenePrefix);
             }
         }
     }

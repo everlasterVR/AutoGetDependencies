@@ -1,4 +1,4 @@
-using MacGruber;
+using MacGruber_Utils;
 using MVR.FileManagementSecure;
 using System;
 using System.Collections;
@@ -239,7 +239,7 @@ namespace everlaster
 
                 SimpleTriggerHandler.LoadAssets();
 
-                _ifDownloadPendingTrigger = AddTrigger("If Download Pending", "If download pending...");
+                _ifDownloadPendingTrigger = AddTrigger("If Download Pending", "If download pending...", "Packages\nMissing", "Only Check For Updates");
                 _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected", "If disabled packages detected...");
                 _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed", "If all dependencies installed...");
                 _ifVamBundledPackagesMissingTrigger = AddTrigger("If VaM Bundled Packages Missing", "If VaM bundled packages missing...");
@@ -546,7 +546,7 @@ namespace everlaster
             var uiDynamic = CreateButton(trigger.label);
             uiDynamic.AddListener(() =>
             {
-                trigger.eventTrigger.OpenPanel();
+                trigger.customTrigger.OpenPanel();
                 if(_usageString.dynamicText != null)
                 {
                     _usageString.dynamicText.gameObject.SetActive(false);
@@ -835,7 +835,15 @@ namespace everlaster
 
                 if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
                 {
-                    _ifDownloadPendingTrigger.Trigger();
+                    if(_missingPackages.Count > 0)
+                    {
+                        _ifDownloadPendingTrigger.TriggerA();
+                    }
+                    else if(_updateRequiredPackages.Count > 0)
+                    {
+                        _ifDownloadPendingTrigger.TriggerB();
+                    }
+
                     _ifDownloadPendingTrigger.SendText(() =>
                     {
                         var sb = new StringBuilder();
@@ -988,7 +996,7 @@ namespace everlaster
                     _infoSb.Append("<color=#FF0000><b>Downloading was interrupted.</b></color>\n\n");
                 }
 
-                if(!_isLatestVam && _ifVamNotLatestTrigger.eventTrigger.HasActions())
+                if(!_isLatestVam && _ifVamNotLatestTrigger.customTrigger.HasActions())
                 {
                     _infoSb.Append("VAM is not in the latest version (>= v1.22).\n\n");
                     _infoSbAlt.Append("VAM is not in the latest version (>= v1.22).\n\n");
@@ -1321,33 +1329,49 @@ namespace everlaster
             var trigger = _triggers[name] = new TriggerWrapper(this, name, label);
             if(enableSendText)
             {
-                {
-                    var chooser = new JSONStorableStringChooser($"{name} UIText", new List<string>(), "", "Send To UIText");
-                    chooser.setCallbackFunction = option => trigger.SelectUITextCallback(option, _uiTexts);
-                    chooser.representsAtomUid = true;
-                    RegisterStringChooser(chooser);
-                    trigger.uiTextChooser = chooser;
-                }
-
-                trigger.eventTrigger.onInitPanel += triggerActionsPanel =>
-                {
-                    var popupT = (RectTransform) Instantiate(manager.configurableScrollablePopupPrefab, triggerActionsPanel);
-                    popupT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 62, 120f);
-                    popupT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Right, 15f, 545f);
-                    var uiDynamic = popupT.GetComponent<UIDynamicPopup>();
-                    uiDynamic.height = 100f;
-                    uiDynamic.labelTextColor = Color.white;
-                    uiDynamic.popupPanelHeight = 500;
-                    uiDynamic.popup.selectColor = _paleBlue;
-                    popupT.Find("Background").GetComponent<Image>().color = Color.clear;
-                    trigger.RegisterOnCloseCallback(() => uiDynamic.popup.visible = false);
-                    trigger.uiTextChooser.popup = uiDynamic.popup;
-                };
-
-                trigger.RegisterCopyToClipboardAction();
+                EnableSendText(trigger, 62f);
             }
 
             return trigger;
+        }
+
+        TriggerWrapper AddTrigger(string name, string label, string eventAName, string eventBName, bool enableSendText = true)
+        {
+            var trigger = _triggers[name] = new TriggerWrapper(this, name, label, eventAName, eventBName);
+            if(enableSendText)
+            {
+                EnableSendText(trigger, 2f);
+            }
+
+            return trigger;
+        }
+
+        void EnableSendText(TriggerWrapper trigger, float popupTopInset)
+        {
+            {
+                var chooser = new JSONStorableStringChooser($"{trigger.customTrigger.name} UIText", new List<string>(), "", "Send To UIText");
+                chooser.setCallbackFunction = option => trigger.SelectUITextCallback(option, _uiTexts);
+                chooser.representsAtomUid = true;
+                RegisterStringChooser(chooser);
+                trigger.uiTextChooser = chooser;
+            }
+
+            trigger.customTrigger.onInitPanel += triggerActionsPanel =>
+            {
+                var popupT = (RectTransform) Instantiate(manager.configurableScrollablePopupPrefab, triggerActionsPanel);
+                popupT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, popupTopInset, 120f);
+                popupT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Right, 15f, 545f);
+                var uiDynamic = popupT.GetComponent<UIDynamicPopup>();
+                uiDynamic.height = 100f;
+                uiDynamic.labelTextColor = Color.white;
+                uiDynamic.popupPanelHeight = 500;
+                uiDynamic.popup.selectColor = _paleBlue;
+                popupT.Find("Background").GetComponent<Image>().color = Color.clear;
+                trigger.RegisterOnCloseCallback(() => uiDynamic.popup.visible = false);
+                trigger.uiTextChooser.popup = uiDynamic.popup;
+            };
+
+            trigger.RegisterCopyToClipboardAction();
         }
 
         void OnError(string message, bool teardown = true)
@@ -1916,7 +1940,7 @@ namespace everlaster
             {
                 if(includePhysical || forceStore)
                 {
-                    needsStore = _triggers.Any(pair => pair.Value.eventTrigger.HasActions()) || forceStore;
+                    needsStore = _triggers.Any(pair => pair.Value.customTrigger.HasActions()) || forceStore;
                     foreach(var pair in _triggers)
                     {
                         pair.Value.StoreJSON(jc, _subScenePrefix);

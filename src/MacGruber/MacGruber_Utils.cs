@@ -16,7 +16,7 @@ using AssetBundles;
 using SimpleJSON;
 using System.Diagnostics.CodeAnalysis;
 
-namespace MacGruber
+namespace MacGruber_Utils
 {
     // ===========================================================================================
 
@@ -110,35 +110,21 @@ namespace MacGruber
             }
         }
 
-        string _secondaryName;
-        public string secondaryName
-        {
-            get { return _secondaryName; }
-            private set
-            {
-                _secondaryName = value;
-                _myNeedInit = true;
-            }
-        }
-
         bool _myNeedInit = true;
         readonly MVRScript _owner;
         public Action<Transform> onInitPanel;
         public List<TriggerActionDiscrete> GetDiscreteActionsStart() => discreteActionsStart;
+        public List<TriggerActionDiscrete> GetDiscreteActionsEnd() => discreteActionsEnd;
 
-        protected CustomTrigger(MVRScript owner, string name, string secondary = null)
+        protected CustomTrigger(MVRScript owner, string name)
         {
             this.name = name;
-            secondaryName = secondary;
             _owner = owner;
             handler = SimpleTriggerHandler.instance;
             SuperController.singleton.onAtomUIDRenameHandlers += OnAtomRename;
         }
 
         void OnAtomRename(string oldName, string newName) => SyncAtomNames();
-
-        GameObject _ownerCloseButton;
-        GameObject _ownerScrollView;
 
         public void OpenPanel()
         {
@@ -149,56 +135,30 @@ namespace MacGruber
             }
 
             triggerActionsParent = _owner.UITransform;
-            _ownerCloseButton = triggerActionsParent.Find("CloseButton").gameObject;
-            _ownerScrollView = triggerActionsParent.Find("Scroll View").gameObject;
             InitTriggerUI();
             OpenTriggerActionsPanel();
             if(_myNeedInit)
             {
                 var panel = triggerActionsPanel.Find("Panel");
                 panel.Find("Header Text").GetComponent<Text>().text = name;
-                var secondaryHeader = panel.Find("Trigger Name Text");
-                secondaryHeader.gameObject.SetActive(!string.IsNullOrEmpty(secondaryName));
-                secondaryHeader.GetComponent<Text>().text = secondaryName;
-
                 InitPanel();
                 _myNeedInit = false;
             }
         }
 
-        public override void OpenTriggerActionsPanel()
+        protected virtual void InitPanel()
         {
-            _ownerCloseButton.SetActive(false);
-            _ownerScrollView.SetActive(false);
-            base.OpenTriggerActionsPanel();
-            var contentT = triggerActionsPanel.Find("Content");
-            if(contentT != null)
-            {
-                foreach(Transform childT in contentT)
-                {
-                    if(!childT.name.Contains("Tab1") && childT.gameObject != null)
-                    {
-                        UnityEngine.Object.Destroy(childT.gameObject);
-                    }
-                }
-            }
+            var rect = triggerActionsPanel.GetComponent<RectTransform>();
+            var pos = rect.anchoredPosition;
+            rect.anchoredPosition = new Vector2(pos.x + 3.5f, pos.y - 10);
+            var size = rect.sizeDelta;
+            rect.sizeDelta = new Vector2(size.x + 20, size.y + 20);
+
+            var panel = triggerActionsPanel.Find("Panel");
+            panel.Find("Header Text").GetComponent<RectTransform>().sizeDelta = new Vector2(500f, 50f);
+            panel.Find("Trigger Name Text").gameObject.SetActive(false);
+            onInitPanel?.Invoke(triggerActionsPanel);
         }
-
-        public override void CloseTriggerActionsPanel()
-        {
-            base.CloseTriggerActionsPanel();
-            if(_ownerCloseButton != null)
-            {
-                _ownerCloseButton.SetActive(true);
-            }
-
-            if(_ownerScrollView != null)
-            {
-                _ownerScrollView.SetActive(true);
-            }
-        }
-
-        protected abstract void InitPanel();
 
         public void RestoreFromJSON(JSONClass jc, string subScenePrefix, bool isMerge, bool setMissingToDefault)
         {
@@ -221,15 +181,13 @@ namespace MacGruber
 
     sealed class EventTrigger : CustomTrigger
     {
-        public EventTrigger(MVRScript owner, string name, string secondary = null) : base(owner, name, secondary)
+        public EventTrigger(MVRScript owner, string name) : base(owner, name)
         {
         }
 
         protected override void InitPanel()
         {
-            var panel = triggerActionsPanel.Find("Panel");
-            panel.Find("Header Text").GetComponent<RectTransform>().sizeDelta = new Vector2(1000f, 50f);
-            onInitPanel?.Invoke(triggerActionsPanel);
+            base.InitPanel();
             var content = triggerActionsPanel.Find("Content");
             content.Find("Tab1/Label").GetComponent<Text>().text = "Event Actions";
             content.Find("Tab2").gameObject.SetActive(false);
@@ -237,6 +195,77 @@ namespace MacGruber
         }
 
         public void Trigger()
+        {
+            active = true;
+            active = false;
+        }
+    }
+
+    sealed class DualEventTrigger : CustomTrigger
+    {
+        readonly string _eventAName;
+        readonly string _eventBName;
+
+        public DualEventTrigger(MVRScript owner, string name, string eventAName, string eventBName) : base(owner, name)
+        {
+            _eventAName = eventAName;
+            _eventBName = eventBName;
+        }
+
+        protected override void InitPanel()
+        {
+            base.InitPanel();
+            var content = triggerActionsPanel.Find("Content");
+
+            {
+                var tabT = content.Find("Tab1");
+                ModifyLabel(tabT, new Vector2(0, 12), new Vector2(0, 6), _eventAName);
+            }
+
+            content.Find("Tab2").gameObject.SetActive(false);
+
+            {
+                var tabT = content.Find("Tab3");
+                var bgRectT = tabT.Find("Background").GetComponent<RectTransform>();
+                var size = bgRectT.sizeDelta;
+                bgRectT.sizeDelta = new Vector2(size.x + 120, size.y);
+                var pos = bgRectT.anchoredPosition;
+                bgRectT.anchoredPosition = new Vector2(pos.x - 300, pos.y);
+                ModifyLabel(tabT, new Vector2(120, 12), new Vector2(-300, 6), _eventBName);
+            }
+        }
+
+        static void ModifyLabel(Transform tabT, Vector2 offsetSize, Vector2 offsetPos, string text)
+        {
+            var labelT = tabT.Find("Label");
+            labelT.GetComponent<Text>().text = text;
+            var rectT = labelT.GetComponent<RectTransform>();
+            var size = rectT.sizeDelta;
+            rectT.sizeDelta = new Vector2(size.x + offsetSize.x, size.y + offsetSize.y);
+            var pos = rectT.anchoredPosition;
+            rectT.anchoredPosition = new Vector2(pos.x + offsetPos.x, pos.y + offsetPos.y);
+        }
+
+        public void TriggerA()
+        {
+            var tmpEndActions = discreteActionsEnd;
+            discreteActionsEnd = new List<TriggerActionDiscrete>();
+            Trigger();
+            discreteActionsEnd = tmpEndActions;
+        }
+
+        public void TriggerB()
+        {
+            var tmpStartActions = discreteActionsStart;
+            var tmpEndActions = discreteActionsEnd;
+            discreteActionsStart = tmpEndActions;
+            discreteActionsEnd = new List<TriggerActionDiscrete>();
+            Trigger();
+            discreteActionsStart = tmpStartActions;
+            discreteActionsEnd = tmpEndActions;
+        }
+
+        void Trigger()
         {
             active = true;
             active = false;
