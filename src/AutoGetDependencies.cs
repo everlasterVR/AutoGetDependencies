@@ -72,6 +72,7 @@ namespace everlaster
         JSONStorableBool _autoDownloadIfPendingBool;
         JSONStorableBool _tempEnableHubBool;
         JSONStorableBool _autoAcceptPackagePluginsBool;
+        JSONStorableAction _recheckInternetConnectionAction;
         JSONStorableAction _downloadAction;
         JSONStorableStringChooser _progressBarChooser;
         public JSONStorableBool logErrorsBool { get; private set; }
@@ -83,6 +84,7 @@ namespace everlaster
         readonly Dictionary<string, TriggerWrapper> _triggers = new Dictionary<string, TriggerWrapper>();
         TriggerWrapper _ifDownloadPendingTrigger;
         TriggerWrapper _ifDisabledPackagesDetectedTrigger;
+        TriggerWrapper _ifNoInternetConnectionTrigger;
         TriggerWrapper _ifAllDependenciesInstalledTrigger;
         TriggerWrapper _ifVamBundledPackagesMissingTrigger;
         TriggerWrapper _ifVamNotLatestTrigger;
@@ -222,6 +224,9 @@ namespace everlaster
                 _autoAcceptPackagePluginsBool = new JSONStorableBool("Auto-accept plugins from packages", false);
                 RegisterBool(_autoAcceptPackagePluginsBool);
 
+                _recheckInternetConnectionAction = new JSONStorableAction("Recheck internet connection", RecheckInternetConnection);
+                RegisterAction(_recheckInternetConnectionAction);
+
                 _downloadAction = new JSONStorableAction("Download missing dependencies", DownloadMissingCallback);
                 RegisterAction(_downloadAction);
 
@@ -245,6 +250,7 @@ namespace everlaster
 
                 _ifDownloadPendingTrigger = AddTrigger("If Download Pending", "If download pending...", "Packages\nMissing", "Only Check For Updates");
                 _ifDisabledPackagesDetectedTrigger = AddTrigger("If Disabled Packages Detected", "If disabled packages detected...");
+                _ifNoInternetConnectionTrigger = AddTrigger("If No Internet Connection", "If no internet connection...", "Not Connected\nActions", "Connection\nRestored Actions", false);
                 _ifAllDependenciesInstalledTrigger = AddTrigger("If All Dependencies Installed", "If all dependencies installed...");
                 _ifVamBundledPackagesMissingTrigger = AddTrigger("If VaM Bundled Packages Missing", "If VaM bundled packages missing...");
                 _ifSomePackagesNotInstalledTrigger = AddTrigger("If Some Packages Not Installed", "If some packages not installed...");
@@ -325,6 +331,7 @@ namespace everlaster
             CreateSpacer().height = 10;
             CreateTriggerMenuButton(_ifDownloadPendingTrigger);
             CreateTriggerMenuButton(_ifDisabledPackagesDetectedTrigger);
+            CreateTriggerMenuButton(_ifNoInternetConnectionTrigger);
             CreateTriggerMenuButton(_ifAllDependenciesInstalledTrigger);
             CreateTriggerMenuButton(_ifVamBundledPackagesMissingTrigger);
             CreateTriggerMenuButton(_ifVamNotLatestTrigger);
@@ -382,7 +389,9 @@ namespace everlaster
             CreateTriggerMenuButton(_ifSomePackagesNotInstalledTrigger);
             CreateTriggerMenuButton(_ifNotOnHubPackagesDetectedTrigger);
             CreateSpacer().height = 10;
-            CreateToggle(logErrorsBool);
+
+            CreateSpacer(true).height = 1135;
+            CreateToggle(logErrorsBool, true);
 
             _usageButton = CreateTextToggleButton("Usage", ShowUsage);
             _usageButton.gameObject.SetActive(false);
@@ -460,7 +469,7 @@ namespace everlaster
                 var usageField = CreateInfoField(_usageString);
                 var rectT = usageField.gameObject.GetComponent<RectTransform>();
                 rectT.pivot = Vector2.zero;
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1210);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 20, 1138);
                 rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
                 var uiTextRectT = usageField.UItext.GetComponent<RectTransform>();
                 var uiTextPos = uiTextRectT.anchoredPosition;
@@ -489,7 +498,7 @@ namespace everlaster
                 var infoField = CreateInfoField(_infoString);
                 var rectT = infoField.GetComponent<RectTransform>();
                 rectT.pivot = Vector2.zero;
-                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 85, 1130);
+                rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Top, 85, 1056);
                 rectT.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 545, 650);
                 var uiTextRectT = infoField.UItext.GetComponent<RectTransform>();
                 var uiTextPos = uiTextRectT.anchoredPosition;
@@ -861,23 +870,30 @@ namespace everlaster
 
                 if(_missingPackages.Count > 0 || _updateRequiredPackages.Count > 0)
                 {
-                    if(_missingPackages.Count > 0)
+                    if(Application.internetReachability == NetworkReachability.NotReachable)
                     {
-                        _ifDownloadPendingTrigger.TriggerA();
+                        _ifNoInternetConnectionTrigger.TriggerA();
                     }
-                    else if(_updateRequiredPackages.Count > 0)
+                    else
                     {
-                        _ifDownloadPendingTrigger.TriggerB();
-                    }
+                        if(_missingPackages.Count > 0)
+                        {
+                            _ifDownloadPendingTrigger.TriggerA();
+                        }
+                        else if(_updateRequiredPackages.Count > 0)
+                        {
+                            _ifDownloadPendingTrigger.TriggerB();
+                        }
 
-                    _ifDownloadPendingTrigger.SendText(() =>
-                    {
-                        var sb = new StringBuilder();
-                        AppendPackagesInfoForUIText(sb, "Missing, download required:", _missingPackages);
-                        AppendPackagesInfoForUIText(sb, "Installed, check for update required:", _updateRequiredPackages);
-                        AppendPackagesInfoForUIText(sb, "Installed, no update required:", _installedPackages);
-                        return sb.ToString();
-                    });
+                        _ifDownloadPendingTrigger.SendText(() =>
+                        {
+                            var sb = new StringBuilder();
+                            AppendPackagesInfoForUIText(sb, "Missing, download required:", _missingPackages);
+                            AppendPackagesInfoForUIText(sb, "Installed, check for update required:", _updateRequiredPackages);
+                            AppendPackagesInfoForUIText(sb, "Installed, no update required:", _installedPackages);
+                            return sb.ToString();
+                        });
+                    }
 
                     _pending = true;
                 }
@@ -1045,9 +1061,17 @@ namespace everlaster
 
                 if(_pending)
                 {
-                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Missing, download required:", _errorColor, _missingPackages);
-                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Installed, check for update required:", _updateRequiredColor, _updateRequiredPackages);
-                    AppendPackagesInfo(_infoSb, _infoSbAlt, "Installed, no update required:", _okColor, _installedPackages);
+                    if(Application.internetReachability == NetworkReachability.NotReachable)
+                    {
+                        _infoSb.AppendFormat("<color=#{0}>No internet connection!</color>\n\n", _errorColor);
+                        _infoSbAlt.Append("No internet connection!\n\n");
+                    }
+                    else
+                    {
+                        AppendPackagesInfo(_infoSb, _infoSbAlt, "Missing, download required:", _errorColor, _missingPackages);
+                        AppendPackagesInfo(_infoSb, _infoSbAlt, "Installed, check for update required:", _updateRequiredColor, _updateRequiredPackages);
+                        AppendPackagesInfo(_infoSb, _infoSbAlt, "Installed, no update required:", _okColor, _installedPackages);
+                    }
                 }
                 else if(_finished)
                 {
@@ -1174,6 +1198,17 @@ namespace everlaster
             {
                 logBuilder.Exception(e);
             }
+        }
+
+        public void RecheckInternetConnection()
+        {
+            if(Application.internetReachability == NetworkReachability.NotReachable)
+            {
+                if(logErrorsBool.val) logBuilder.Error("No internet connection");
+                return;
+            }
+
+            _ifNoInternetConnectionTrigger.TriggerB();
         }
 
         void DownloadMissingCallback()
