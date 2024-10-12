@@ -155,7 +155,7 @@ namespace MacGruber_Utils
             rect.sizeDelta = new Vector2(size.x + 20, size.y + 20);
 
             var panel = triggerActionsPanel.Find("Panel");
-            panel.Find("Header Text").GetComponent<RectTransform>().sizeDelta = new Vector2(500f, 50f);
+            panel.Find("Header Text").GetComponent<RectTransform>().sizeDelta = new Vector2(1000f, 50f);
             panel.Find("Trigger Name Text").gameObject.SetActive(false);
             onInitPanel?.Invoke(triggerActionsPanel);
         }

@@ -5,7 +5,7 @@
   "standardReferenceVersionOption": "Latest",
   "scriptReferenceVersionOption": "Exact",
   "description": "v0.0.0. A comprehensive tool for scanning and downloading a package's dependencies, with many options for configuration and scene integration.",
-  "credits": "VamTimbo, MacGruber, DemonLord",
+  "credits": "VamTimbo, MacGruber",
   "instructions": "See plugin UI and Hub post.",
   "promotionalLink": "https://patreon.com/everlaster",
   "programVersion": "1.22.0.3",
