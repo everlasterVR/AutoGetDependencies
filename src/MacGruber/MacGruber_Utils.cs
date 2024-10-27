@@ -13,6 +13,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using AssetBundles;
+using everlaster;
 using SimpleJSON;
 using System.Diagnostics.CodeAnalysis;
 
@@ -112,9 +113,13 @@ namespace MacGruber_Utils
 
         bool _myNeedInit = true;
         readonly MVRScript _owner;
+        UnityEventsListener _enabledListener;
         public Action<Transform> onInitPanel;
         public List<TriggerActionDiscrete> GetDiscreteActionsStart() => discreteActionsStart;
         public List<TriggerActionDiscrete> GetDiscreteActionsEnd() => discreteActionsEnd;
+
+        // built in HasActions() req. VAM >= 1.22
+        public bool IsEmpty() => discreteActionsStart.Count == 0 && transitionActions.Count == 0 && discreteActionsEnd.Count == 0;
 
         protected CustomTrigger(MVRScript owner, string name)
         {
@@ -146,6 +151,9 @@ namespace MacGruber_Utils
             }
         }
 
+        // built in onCloseTriggerActionsPanel delegate req. VAM >= 1.22
+        public Action panelDisabledHandlers;
+
         protected virtual void InitPanel()
         {
             var rect = triggerActionsPanel.GetComponent<RectTransform>();
@@ -158,6 +166,9 @@ namespace MacGruber_Utils
             panel.Find("Header Text").GetComponent<RectTransform>().sizeDelta = new Vector2(1000f, 50f);
             panel.Find("Trigger Name Text").gameObject.SetActive(false);
             onInitPanel?.Invoke(triggerActionsPanel);
+
+            _enabledListener = triggerActionsPanel.gameObject.AddComponent<UnityEventsListener>();
+            _enabledListener.disabledHandlers = panelDisabledHandlers;
         }
 
         public void RestoreFromJSON(JSONClass jc, string subScenePrefix, bool isMerge, bool setMissingToDefault)

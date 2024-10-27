@@ -45,7 +45,7 @@ namespace everlaster
         {
             _script = script;
             _eventTrigger = new EventTrigger(script, name);
-            _eventTrigger.onCloseTriggerActionsPanel += UpdateButtonLabel;
+            _eventTrigger.panelDisabledHandlers += UpdateButtonLabel;
             customTrigger = _eventTrigger;
             UpdateButtonLabel();
             this.label = label;
@@ -55,14 +55,11 @@ namespace everlaster
         {
             _script = script;
             _dualEventTrigger = new DualEventTrigger(script, name, eventAName, eventBName);
-            _dualEventTrigger.onCloseTriggerActionsPanel += UpdateButtonLabel;
+            _dualEventTrigger.panelDisabledHandlers += UpdateButtonLabel;
             customTrigger = _dualEventTrigger;
             UpdateButtonLabel();
             this.label = label;
         }
-
-        public void RegisterOnCloseCallback(Trigger.OnCloseTriggerActionsPanel callback) =>
-            customTrigger.onCloseTriggerActionsPanel += callback;
 
         public void RegisterCopyToClipboardAction()
         {
@@ -385,7 +382,7 @@ namespace everlaster
 
         public void StoreJSON(JSONClass jc, string subScenePrefix)
         {
-            if(customTrigger.HasActions())
+            if(!customTrigger.IsEmpty())
             {
                 jc[customTrigger.name] = customTrigger.GetJSON(subScenePrefix);
             }

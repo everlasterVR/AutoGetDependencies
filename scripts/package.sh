@@ -41,6 +41,7 @@ update_version_info() {
 hide_files() {
   for file in $(find "$resource_dir" -type f -name "*.cs"); do
     sed -i "s/#define ENV_DEVELOPMENT/\/\//" "$file"
+    sed -i "s/#define VAM_GT_1_22/\/\//" "$file"
     touch "$file.hide"
   done
 }

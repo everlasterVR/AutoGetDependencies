@@ -1,3 +1,4 @@
+#define VAM_GT_1_22
 using MacGruber_Utils;
 using MVR.FileManagementSecure;
 using System;
@@ -564,7 +565,7 @@ namespace everlaster
                 trigger.customTrigger.OpenPanel();
                 HideUsageAndInfo();
             });
-            trigger.RegisterOnCloseCallback(SyncShowUsageOrInfo);
+            trigger.customTrigger.panelDisabledHandlers += SyncShowUsageOrInfo;
             var textComponent = uiDynamic.buttonText;
             textComponent.resizeTextForBestFit = true;
             textComponent.resizeTextMinSize = 24;
@@ -1428,7 +1429,7 @@ namespace everlaster
                 uiDynamic.popupPanelHeight = 500;
                 uiDynamic.popup.selectColor = _paleBlue;
                 popupT.Find("Background").GetComponent<Image>().color = Color.clear;
-                trigger.RegisterOnCloseCallback(() => uiDynamic.popup.visible = false);
+                trigger.customTrigger.panelDisabledHandlers += () => uiDynamic.popup.visible = false;
                 trigger.uiTextChooser.popup = uiDynamic.popup;
             };
 
@@ -1744,16 +1745,32 @@ namespace everlaster
                 foreach(var obj in pendingPackages)
                 {
                     MVR.Hub.HubResourcePackage.DownloadQueuedCallback queuedCallback = _ => obj.downloadQueued = true;
-                    MVR.Hub.HubResourcePackage.DownloadStartCallback startCallback = _ => obj.downloadStarted = true;
-                    MVR.Hub.HubResourcePackage.DownloadCompleteCallback completeCallback = (_, __) => obj.downloadComplete = true;
-                    MVR.Hub.HubResourcePackage.DownloadErrorCallback errorCallback = (_, e) => obj.downloadError = e;
                     obj.connectedItem.downloadQueuedCallback += queuedCallback;
-                    obj.connectedItem.downloadStartCallback += startCallback;
-                    obj.connectedItem.downloadCompleteCallback += completeCallback;
-                    obj.connectedItem.downloadErrorCallback += errorCallback;
                     obj.storeQueuedCallback = queuedCallback;
+
+                    MVR.Hub.HubResourcePackage.DownloadStartCallback startCallback = _ => obj.downloadStarted = true;
+                    obj.connectedItem.downloadStartCallback += startCallback;
                     obj.storeStartCallback = startCallback;
-                    obj.storeCompleteCallback = completeCallback;
+
+                    // ReSharper disable once TooWideLocalVariableScope
+                    MVR.Hub.HubResourcePackage.DownloadCompleteCallback completeCallback;
+
+                    #if VAM_GT_1_22
+                    {
+                        completeCallback = (_, __) => obj.downloadComplete = true;
+                        obj.connectedItem.downloadCompleteCallback += completeCallback;
+                        obj.storeCompleteCallback = completeCallback;
+                    }
+                    #else
+                    {
+                        completeCallback = _ => obj.downloadComplete = true;
+                        obj.connectedItem.downloadCompleteCallback += completeCallback;
+                        obj.storeCompleteCallback = completeCallback;
+                    }
+                    #endif
+
+                    MVR.Hub.HubResourcePackage.DownloadErrorCallback errorCallback = (_, e) => obj.downloadError = e;
+                    obj.connectedItem.downloadErrorCallback += errorCallback;
                     obj.storeErrorCallback = errorCallback;
                 }
             }
