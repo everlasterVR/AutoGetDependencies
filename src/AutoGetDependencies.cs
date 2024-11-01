@@ -1,3 +1,4 @@
+#define VAM_GT_1_21
 #define VAM_GT_1_22
 using MacGruber_Utils;
 using MVR.FileManagementSecure;
@@ -26,7 +27,7 @@ namespace everlaster
         UnityEventsListener _uiListener;
         Transform _scrollView;
         bool _uiCreated;
-        public LogBuilder logBuilder { get; private set; }
+        public readonly LogBuilder logBuilder = new LogBuilder(nameof(AutoGetDependencies));
         Bindings _bindings;
         JSONClass _metaJson;
         HubBrowse _hubBrowse;
@@ -102,6 +103,12 @@ namespace everlaster
         public override void InitUI()
         {
             base.InitUI();
+            #if !VAM_GT_1_21
+            {
+                return;
+            }
+            #endif
+
             if(UITransform == null)
             {
                 return;
@@ -146,23 +153,22 @@ namespace everlaster
             }
         }
 
-        void OnInitError(string error)
-        {
-            logBuilder.Error(error);
-            CreateTextField(new JSONStorableString("error", error)).backgroundColor = Color.clear;
-            enabledJSON.valNoCallback = false;
-        }
-
         public override void Init()
         {
             try
             {
-                logBuilder = new LogBuilder(nameof(AutoGetDependencies));
+                #if !VAM_GT_1_21
+                {
+                    AlertWithRemoveCallback("AutoGetDependencies requires VaM v1.21 or newer");
+                    return;
+                }
+                #endif
+
                 var coreControl = SuperController.singleton.GetAtomByUid("CoreControl");
                 _hubBrowse = (HubBrowse) coreControl.GetStorableByID("HubBrowseController");
                 if(_hubBrowse == null)
                 {
-                    OnInitError("HubBrowseController not found. Hub missing... ??");
+                    AlertWithRemoveCallback("AutoGetDependencies: HubBrowseController not found.");
                     return;
                 }
 
@@ -280,6 +286,30 @@ namespace everlaster
             }
         }
 
+        void AlertWithRemoveCallback(string error)
+        {
+            #if VAM_GT_1_21
+            {
+                var sb = new StringBuilder();
+                sb.Append($"\n\n<color=#{ColorUtility.ToHtmlStringRGB(new Color(0.45f, 0.125f, 0.125f))}>")
+                    .Append($"<size=44>{error}</size>")
+                    .Append("</color>");
+
+                SuperController.singleton.Alert(sb.ToString(), () => manager.RemovePluginWithUID(this.GetPluginId()));
+            }
+            #else
+            {
+                logBuilder.Error(error);
+                var textField = CreateTextField(new JSONStorableString("error", error));
+                textField.backgroundColor = Color.clear;
+                var layoutElement = textField.GetComponent<LayoutElement>();
+                layoutElement.minHeight = 1000;
+                layoutElement.preferredHeight = 1000;
+                enabledJSON.valNoCallback = false;
+            }
+            #endif
+        }
+
         void RecheckDependencies()
         {
             if(_metaJson == null || !_metaRead)
@@ -292,15 +322,23 @@ namespace everlaster
 
         JSONClass FindLoadedSceneMetaJson()
         {
-            string loadedScene =  SuperController.singleton.LoadedSceneName;
-            if(loadedScene == null || !loadedScene.Contains(":/"))
+            #if VAM_GT_1_21
+            {
+                string loadedScene = SuperController.singleton.LoadedSceneName;
+                if(loadedScene == null || !loadedScene.Contains(":/"))
+                {
+                    return null;
+                }
+
+                string metaJsonPath = loadedScene.Split(':')[0] + ":/meta.json";
+                _pathString.val = metaJsonPath;
+                return SuperController.singleton.LoadJSON(metaJsonPath)?.AsObject;
+            }
+            #else
             {
                 return null;
             }
-
-            string metaJsonPath = loadedScene.Split(':')[0] + ":/meta.json";
-            _pathString.val = metaJsonPath;
-            return SuperController.singleton.LoadJSON(metaJsonPath)?.AsObject;
+            #endif
         }
 
         void CreateUI()
@@ -1039,7 +1077,7 @@ namespace everlaster
                     _infoSb.Append("<color=#FF0000><b>Downloading was interrupted.</b></color>\n\n");
                 }
 
-                if(!_isLatestVam && _ifVamNotLatestTrigger.customTrigger.HasActions())
+                if(!_isLatestVam && !_ifVamNotLatestTrigger.customTrigger.IsEmpty())
                 {
                     _infoSb.Append("VAM is not in the latest version (>= v1.22).\n\n");
                     _infoSbAlt.Append("VAM is not in the latest version (>= v1.22).\n\n");
@@ -2018,7 +2056,7 @@ namespace everlaster
             {
                 if(includePhysical || forceStore)
                 {
-                    needsStore = _triggers.Any(pair => pair.Value.customTrigger.HasActions()) || forceStore;
+                    needsStore = _triggers.Any(pair => !pair.Value.customTrigger.IsEmpty()) || forceStore;
                     foreach(var pair in _triggers)
                     {
                         pair.Value.StoreJSON(jc, _subScenePrefix);

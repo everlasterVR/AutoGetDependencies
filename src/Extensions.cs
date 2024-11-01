@@ -66,6 +66,12 @@ namespace everlaster
 
     static class MVRScriptExtensions
     {
+        public static string GetPluginId(this MVRScript script)
+        {
+            int index = script.name.IndexOf('_');
+            return index == -1 ? script.name : script.name.Substring(0, index);
+        }
+
         public static void SelectPluginUI(this MVRScript script, Action postAction = null) =>
             script.StartCoroutine(SelectPluginUICo(script, postAction));
 
